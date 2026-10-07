@@ -7,6 +7,8 @@ coverage gap. Security-sensitive reports belong in the private reporting channel
 A useful change includes a failing fixture, the smallest correction, and a passing
 regression. Keep API authorization, response schemas, and handoff checks independently
 usable. Document untested surfaces and errors explicitly; never trade them for a green exit.
+Exploration changes must remain model-neutral, use scripted fake providers in tests, and prove
+that unknown cases, broken provider output, failed controls and partial coverage cannot pass.
 
 The public contract is the policy schema, CLI, report schema, exit-code semantics, and
 checked-bundle manifest. Change them deliberately and update examples and tests together.

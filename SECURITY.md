@@ -18,9 +18,15 @@ Sensitive handling rules:
 
 - Credentials enter through named environment variables and are not persisted in reports.
 - Response bodies and raw scanner output must never reach PermitProbe reports.
+- Exploration providers receive normalized case and observation metadata only. They do not
+  receive target credentials, response bodies, headers, URLs, redirect destinations or files.
+- A provider may select only precompiled case IDs. Its completion hint, prose or malformed
+  output cannot produce a passing result or introduce a request outside the declared policy.
+- Provider rationale and correlation strings are not retained in reports or state.
 - Unknown outcomes, missing tools, missing files, and failed controls must not pass.
 - No automatic remediation, production writes, deployment, or external upload.
 - Dependency updates must retain known-bad and known-good regression fixtures.
 
-The dependency executables and configuration are trusted inputs. This project does not
+The dependency, scanner and explicitly selected exploration-provider executables and their
+configuration are trusted inputs. This project does not
 claim to contain malicious local programs or protect a machine compromised by its owner.

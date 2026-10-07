@@ -1,5 +1,6 @@
 include AGENTS.md CONTRIBUTING.md SECURITY.md NOTICE LICENSE
 include requirements.lock permitprobe.schema.json
 recursive-include examples *.json *.txt
+recursive-include docs *.md
 recursive-include scripts *.py
 recursive-include tests *.py

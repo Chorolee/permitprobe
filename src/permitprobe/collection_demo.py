@@ -21,6 +21,7 @@ def collection_policy(base_url: str = "https://staging.example.invalid") -> dict
         "version": 1,
         "api": {
             "base_url": base_url,
+            "probe_victims": "all",
             "subjects": [
                 {"name": "anon", "role": "anonymous"},
                 *[

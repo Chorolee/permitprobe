@@ -17,6 +17,7 @@ SIGNED_SENTINEL = "synthetic-signed-token-do-not-report"
 SCENARIOS = (
     "safe",
     "private-leak",
+    "selective-owner-leak",
     "moderator-leak",
     "collection-leak",
     "cache-leak",
@@ -111,6 +112,7 @@ def read_policy(base_url: str = "https://staging.example.invalid") -> dict:
         "version": 1,
         "api": {
             "base_url": base_url,
+            "probe_victims": "all",
             "subjects": [{"name": "anon", "role": "anonymous"}]
             + [
                 {
@@ -189,6 +191,12 @@ def read_server(scenario: str = "safe"):
                     allowed |= (
                         filename == "published.png"
                         or scenario == "private-leak"
+                        or (
+                            scenario == "selective-owner-leak"
+                            and subject == "bob"
+                            and owner == "moderator"
+                            and filename == "private.png"
+                        )
                         or scenario.startswith("grant-body-")
                     )
                 elif section == "applications":

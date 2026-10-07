@@ -5,20 +5,24 @@ providers, MCP commands, waivers, or raw upstream reports are executed/written.
 """
 
 import asyncio
+import hashlib
 import json
 import os
 import re
+from dataclasses import dataclass
 from importlib.metadata import version
+from time import monotonic
+from typing import Callable
 
 import httpx
 from jsonschema import Draft202012Validator
+from overstep.classifier import classify
 from overstep.matrix import Matrix
-from overstep.models import Effect, Observation
-from overstep.pipeline import run_pipeline
+from overstep.models import Effect, Observation, RunResult, TestCase
 from overstep.planner import plan
 
 from permitprobe.policy import API, ID_VALUE, _unique
-from permitprobe.report import Report
+from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import private_cache_matches, redirect_matches
 
 OVERSTEP_VERSION = "1.5.0"
@@ -26,14 +30,23 @@ DENIAL_STATUSES = {401, 403, 404}
 
 
 async def fetch(
-    url: str, headers: dict[str, str], config: API, redirect_status: int | None = None
+    url: str,
+    headers: dict[str, str],
+    config: API,
+    redirect_status: int | None = None,
+    timeout_seconds: float | None = None,
 ) -> tuple[int, str, httpx.Headers]:
     # Absolute deadline includes connect, headers, and a trickling response body.
     # A per-read socket timeout alone cannot bound a slow-drip server.
-    async with asyncio.timeout(config.timeout_seconds):
+    timeout = (
+        config.timeout_seconds
+        if timeout_seconds is None
+        else min(config.timeout_seconds, timeout_seconds)
+    )
+    async with asyncio.timeout(timeout):
         # New client per case: cookies cannot cross identity boundaries.
         async with httpx.AsyncClient(
-            trust_env=False, follow_redirects=False, timeout=config.timeout_seconds
+            trust_env=False, follow_redirects=False, timeout=timeout
         ) as client:
             async with client.stream("GET", url, headers=headers) as response:
                 if response.status_code == redirect_status:
@@ -50,9 +63,18 @@ async def fetch(
                 return response.status_code, body.decode("utf-8"), response.headers
 
 
-def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
+def compile_matrix(
+    config: API, *, resolve_tokens: bool = False, include_exploration: bool = False
+) -> dict:
     if not resolve_tokens and (
-        any(s.cookie_env for s in config.subjects) or any(r.redirect for r in config.resources)
+        any(s.cookie_env for s in config.subjects)
+        or any(
+            r.redirect
+            for r in [
+                *config.resources,
+                *(config.exploration_resources if include_exploration else []),
+            ]
+        )
     ):
         raise ValueError("cookie and redirect contracts cannot be exported as an auth-only matrix")
     subjects = []
@@ -82,7 +104,11 @@ def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
             }
         )
     resources = []
-    for r in config.resources:
+    selected_resources = [
+        *config.resources,
+        *(config.exploration_resources if include_exploration else []),
+    ]
+    for r in selected_resources:
         item = {"name": r.name, "type": r.kind, "request": {"method": "GET", "path": r.path}}
         if r.kind == "object":
             item.update(owner=r.owner_param, owner_attr=r.owner_attr)
@@ -90,9 +116,13 @@ def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
     return {
         "roles": list(dict.fromkeys(["anonymous", *[s.role for s in config.subjects]])),
         "modules": {"rest": {"base_url": config.base_url}},
+        "probe_victims": config.probe_victims,
         "subjects": subjects,
         "resources": resources,
-        "policy": {r.name: {"allow": [a.model_dump() for a in r.allow]} for r in config.resources},
+        "policy": {
+            resource.name: {"allow": [rule.model_dump() for rule in resource.allow]}
+            for resource in selected_resources
+        },
     }
 
 
@@ -113,7 +143,9 @@ def pointer_value(data, pointer: str):
     return value
 
 
-def check_collection(data, rule, subject, report: Report, target: str) -> None:
+def check_collection(
+    data, rule, subject, report: Report, target: str, evidence_id: str | None = None
+) -> None:
     try:
         items = pointer_value(data, rule.items_pointer)
     except (KeyError, IndexError, TypeError, ValueError):
@@ -124,6 +156,7 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
             "inconclusive",
             target,
             "Expected a nonempty collection; ownership control is unverified.",
+            evidence_id,
         )
         return
     foreign = 0
@@ -157,6 +190,7 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
             "Collection contains IDs outside the subject's declared item set."
             if by_items
             else "Collection contains items owned by someone other than the requesting subject.",
+            evidence_id,
         )
     if unknown:
         report.add(
@@ -164,6 +198,7 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
             "inconclusive",
             target,
             "Some collection items have no usable identity; ownership is unverified.",
+            evidence_id,
         )
     if not foreign and not unknown:
         report.add(
@@ -173,17 +208,57 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
             "Every returned item ID is in the subject's declared item set."
             if by_items
             else "Every returned collection item belongs to the requesting subject.",
+            evidence_id,
         )
 
 
-def check_api(config: API, report: Report) -> None:
+def case_target(case: TestCase) -> str:
+    parts = [case.resource, case.subject, case.variant.value]
+    if case.victim:
+        parts.append(case.victim)
+    return "/".join(parts)
+
+
+def case_descriptor(case: TestCase) -> dict:
+    return {
+        "case_id": case.id,
+        "resource": case.resource,
+        "subject": case.subject,
+        "owner": case.victim,
+        "role": case.role,
+        "variant": case.variant.value,
+        "expected": case.expected.value,
+        "method": case.method,
+    }
+
+
+@dataclass
+class PreparedAPI:
+    config: API
+    matrix: Matrix
+    cases: list[TestCase]
+    resources: dict
+    subjects: dict
+    validators: dict
+    denial_validators: dict
+
+
+def prepare_api(
+    config: API, report: Report, *, include_exploration: bool = False
+) -> PreparedAPI | None:
     report.configured.extend(["api", "data"])
     report.engines["overstep"] = version("overstep")
     if report.engines["overstep"] != OVERSTEP_VERSION:
         report.add("api.engine_version", "inconclusive", "api", "Untested Overstep version.")
-        return
+        return None
     try:
-        matrix = Matrix.model_validate(compile_matrix(config, resolve_tokens=True))
+        matrix = Matrix.model_validate(
+            compile_matrix(
+                config,
+                resolve_tokens=True,
+                include_exploration=include_exploration,
+            )
+        )
         cases = plan(matrix)
     except Exception:
         report.add(
@@ -192,7 +267,7 @@ def check_api(config: API, report: Report) -> None:
             "api",
             "Cannot compile matrix; check distinct credentials and resource declarations.",
         )
-        return
+        return None
     if not cases or len(cases) > config.max_cases or not any(c.is_negative for c in cases):
         report.add(
             "api.coverage",
@@ -200,7 +275,7 @@ def check_api(config: API, report: Report) -> None:
             "api",
             "Expected a bounded plan containing both allowed and denied requests.",
         )
-        return
+        return None
     # A public endpoint cannot establish that an authenticated credential works.
     anonymous = next(s.name for s in config.subjects if s.role == "anonymous")
     protected = {
@@ -216,178 +291,319 @@ def check_api(config: API, report: Report) -> None:
                 s.name,
                 "Each authenticated subject needs an allowed request on a protected resource.",
             )
-            return
-    resources = {r.name: r for r in config.resources}
+            return None
+    selected_resources = [
+        *config.resources,
+        *(config.exploration_resources if include_exploration else []),
+    ]
+    resources = {resource.name: resource for resource in selected_resources}
     subjects = {s.name: s for s in config.subjects}
     validators = {
-        r.name: Draft202012Validator(r.response_schema) for r in config.resources if not r.redirect
+        resource.name: Draft202012Validator(resource.response_schema)
+        for resource in selected_resources
+        if not resource.redirect
     }
-    denial_validators = {r.name: Draft202012Validator(r.denial_schema) for r in config.resources}
+    denial_validators = {
+        resource.name: Draft202012Validator(resource.denial_schema)
+        for resource in selected_resources
+    }
+    contract = config.model_dump(mode="json")
+    for operational in ("base_url", "timeout_seconds", "max_response_bytes", "max_cases"):
+        contract.pop(operational, None)
+    if not include_exploration:
+        contract.pop("exploration_resources", None)
+    report.policy_digest = hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    report.plan([case_descriptor(case) for case in cases])
+    return PreparedAPI(
+        config, matrix, cases, resources, subjects, validators, denial_validators
+    )
 
-    def executor(base_url, engine_subjects, planned, **_):
-        tokens = {s.name: s.token for s in engine_subjects}
-        observations = []
-        for case in planned:
-            target = f"{case.resource}/{case.subject}/{case.variant.value}"
-            resource = resources[case.resource]
-            owner = subjects[case.victim or case.subject]
-            headers = {"Accept": "application/json", "Accept-Encoding": "identity"}
-            if tokens[case.subject]:
-                if subjects[case.subject].cookie_env:
-                    headers["Cookie"] = tokens[case.subject]
-                else:
-                    headers["Authorization"] = "Bearer " + tokens[case.subject]
-            try:
-                status, text, response_headers = asyncio.run(
-                    fetch(
-                        base_url.rstrip("/") + case.path,
-                        headers,
-                        config,
-                        resource.redirect.status if resource.redirect else None,
-                    )
-                )
-            except Exception:
-                report.add(
-                    "api.delivery",
-                    "inconclusive",
-                    target,
-                    "Request failed, response encoding unsupported, or budget exceeded.",
-                )
-                observations.append(
-                    Observation(
-                        test_id=case.id, status=0, effect=Effect.DENY, error="delivery failed"
-                    )
-                )
-                continue
-            if resource.redirect:
-                is_grant = status == resource.redirect.status and redirect_matches(
-                    resource.redirect,
-                    response_headers,
-                    resource.owner_param,
-                    owner.attributes[resource.owner_attr],
-                )
+
+def execute_api_cases(
+    prepared: PreparedAPI,
+    planned: list[TestCase],
+    report: Report,
+    *,
+    deadline: float | None = None,
+    clock: Callable[[], float] = monotonic,
+) -> list[Observation]:
+    tokens = {subject.name: subject.token for subject in prepared.matrix.subjects}
+    observations = []
+    for case in planned:
+        remaining = None if deadline is None else deadline - clock()
+        if remaining is not None and remaining <= 0:
+            break
+        target = case_target(case)
+        resource = prepared.resources[case.resource]
+        owner = prepared.subjects[case.victim or case.subject]
+        headers = {"Accept": "application/json", "Accept-Encoding": "identity"}
+        if tokens[case.subject]:
+            if prepared.subjects[case.subject].cookie_env:
+                headers["Cookie"] = tokens[case.subject]
             else:
-                is_grant = 200 <= status < 300
-            effect = Effect.ALLOW if is_grant else Effect.DENY
-            observations.append(
-                Observation(
-                    test_id=case.id,
-                    status=status,
-                    effect=effect,
-                    matched_markers=[m for m in case.expect_markers if m and m in text],
+                headers["Authorization"] = "Bearer " + tokens[case.subject]
+        try:
+            status, text, response_headers = asyncio.run(
+                fetch(
+                    prepared.config.base_url.rstrip("/") + case.path,
+                    headers,
+                    prepared.config,
+                    resource.redirect.status if resource.redirect else None,
+                    remaining,
                 )
             )
-            if not is_grant and status not in DENIAL_STATUSES:
-                report.add(
-                    "api.redirect_control" if resource.redirect else "api.unexpected_status",
-                    "inconclusive",
-                    target,
-                    f"HTTP {status} did not establish the declared redirect grant."
-                    if resource.redirect
-                    else f"HTTP {status} does not establish an access-control decision.",
+        except Exception:
+            observation = Observation(
+                test_id=case.id, status=0, effect=Effect.DENY, error="delivery failed"
+            )
+            observations.append(observation)
+            report.observe(
+                Evidence(
+                    case.id,
+                    case.resource,
+                    case.subject,
+                    case.victim,
+                    case.variant.value,
+                    case.expected.value,
+                    "unknown",
+                    0,
+                    "failed",
                 )
-                continue
-            if case.expected == effect:
-                report.add(
-                    "api.authorization",
-                    "pass",
-                    target,
-                    f"Expected {case.expected.value}; received HTTP {status}.",
+            )
+            report.add(
+                "api.delivery",
+                "inconclusive",
+                target,
+                "Request failed, response encoding unsupported, or budget exceeded.",
+                case.id,
+            )
+            continue
+        if deadline is not None and clock() >= deadline:
+            observation = Observation(
+                test_id=case.id,
+                status=0,
+                effect=Effect.DENY,
+                error="delivery exceeded total deadline",
+            )
+            observations.append(observation)
+            report.observe(
+                Evidence(
+                    case.id,
+                    case.resource,
+                    case.subject,
+                    case.victim,
+                    case.variant.value,
+                    case.expected.value,
+                    "unknown",
+                    0,
+                    "failed",
                 )
-            elif case.expected == Effect.ALLOW:
-                report.add(
-                    "api.positive_control",
-                    "inconclusive",
-                    target,
-                    f"Allowed control returned HTTP {status}; identity is unverified.",
-                )
-            # Unexpected allows are classified by Overstep below.
-            if is_grant and resource.private_cache:
-                valid_cache = private_cache_matches(
-                    response_headers,
-                    "Cookie" if subjects[case.subject].cookie_env else "Authorization",
-                )
-                report.add(
-                    "data.private_cache",
-                    "pass" if valid_cache else "fail",
-                    target,
-                    "Response matches the declared private-cache header contract."
-                    if valid_cache
-                    else "Response does not match the declared private-cache header contract.",
-                )
-            if is_grant and resource.redirect:
-                report.add(
-                    "api.redirect_control",
-                    "pass",
-                    target,
-                    "Location matches the pinned origin, object path and query shape; destination not fetched.",
-                )
-                continue
+            )
+            report.add(
+                "api.delivery",
+                "inconclusive",
+                target,
+                "Request exceeded the total run deadline; its response was discarded.",
+                case.id,
+            )
+            continue
+        if resource.redirect:
+            is_grant = status == resource.redirect.status and redirect_matches(
+                resource.redirect,
+                response_headers,
+                resource.owner_param,
+                owner.attributes[resource.owner_attr],
+            )
+        else:
+            is_grant = 200 <= status < 300
+        effect = Effect.ALLOW if is_grant else Effect.DENY
+        observation = Observation(
+            test_id=case.id,
+            status=status,
+            effect=effect,
+            matched_markers=[marker for marker in case.expect_markers if marker and marker in text],
+        )
+        observations.append(observation)
+        report.observe(
+            Evidence(
+                case.id,
+                case.resource,
+                case.subject,
+                case.victim,
+                case.variant.value,
+                case.expected.value,
+                effect.value,
+                status,
+                "complete",
+            )
+        )
+        if not is_grant and status not in DENIAL_STATUSES:
+            report.add(
+                "api.redirect_control" if resource.redirect else "api.unexpected_status",
+                "inconclusive",
+                target,
+                f"HTTP {status} did not establish the declared redirect grant."
+                if resource.redirect
+                else f"HTTP {status} does not establish an access-control decision.",
+                case.id,
+            )
+            continue
+        if case.expected == effect:
+            report.add(
+                "api.authorization",
+                "pass",
+                target,
+                f"Expected {case.expected.value}; received HTTP {status}.",
+                case.id,
+            )
+        elif case.expected == Effect.ALLOW:
+            report.add(
+                "api.positive_control",
+                "inconclusive",
+                target,
+                f"Allowed control returned HTTP {status}; identity is unverified.",
+                case.id,
+            )
+        # Unexpected allows are classified after every selected case is observed.
+        if is_grant and resource.private_cache:
+            valid_cache = private_cache_matches(
+                response_headers,
+                "Cookie" if prepared.subjects[case.subject].cookie_env else "Authorization",
+            )
+            report.add(
+                "data.private_cache",
+                "pass" if valid_cache else "fail",
+                target,
+                "Response matches the declared private-cache header contract."
+                if valid_cache
+                else "Response does not match the declared private-cache header contract.",
+                case.id,
+            )
+        if is_grant and resource.redirect:
+            report.add(
+                "api.redirect_control",
+                "pass",
+                target,
+                "Location matches the pinned origin, object path and query shape; destination not fetched.",
+                case.id,
+            )
+            continue
+        try:
+            data = json.loads(
+                text,
+                object_pairs_hook=_unique,
+                parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+            )
+        except (ValueError, RecursionError):
+            report.add(
+                "data.json",
+                "inconclusive",
+                target,
+                "Response is not valid JSON; fields were not verified.",
+                case.id,
+            )
+            continue
+        validator = (
+            prepared.validators if effect == Effect.ALLOW else prepared.denial_validators
+        )[case.resource]
+        errors = list(validator.iter_errors(data))
+        schema_code = "data.schema" if effect == Effect.ALLOW else "data.denial_schema"
+        if errors:
+            keywords = ", ".join(sorted({str(error.validator) for error in errors}))
+            report.add(
+                schema_code,
+                "fail",
+                target,
+                f"Response violates declared schema ({keywords}); values omitted.",
+                case.id,
+            )
+        else:
+            report.add(
+                schema_code, "pass", target, "Response matches declared schema.", case.id
+            )
+        if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
+            check_collection(
+                data,
+                resource.collection,
+                prepared.subjects[case.subject],
+                report,
+                target,
+                case.id,
+            )
+        if (
+            resource.kind == "object"
+            and case.expected == Effect.ALLOW
+            and effect == Effect.ALLOW
+        ):
             try:
-                data = json.loads(
-                    text,
-                    object_pairs_hook=_unique,
-                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-                )
-            except (ValueError, RecursionError):
-                report.add(
-                    "data.json",
-                    "inconclusive",
-                    target,
-                    "Response is not valid JSON; fields were not verified.",
-                )
-                continue
-            validator = (validators if effect == Effect.ALLOW else denial_validators)[case.resource]
-            errors = list(validator.iter_errors(data))
-            schema_code = "data.schema" if effect == Effect.ALLOW else "data.denial_schema"
-            if errors:
-                keywords = ", ".join(sorted({str(e.validator) for e in errors}))
-                report.add(
-                    schema_code,
-                    "fail",
-                    target,
-                    f"Response violates declared schema ({keywords}); values omitted.",
-                )
-            else:
-                report.add(schema_code, "pass", target, "Response matches declared schema.")
-            if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
-                check_collection(data, resource.collection, subjects[case.subject], report, target)
-            if (
-                resource.kind == "object"
-                and case.expected == Effect.ALLOW
-                and effect == Effect.ALLOW
-            ):
-                owner = subjects[case.victim or case.subject]
-                try:
-                    actual = pointer_value(data, resource.identity_pointer)
-                    valid_identity = actual == owner.attributes[resource.owner_attr]
-                except (KeyError, IndexError, TypeError, ValueError):
-                    valid_identity = False
-                report.add(
-                    "api.object_control",
-                    "pass" if valid_identity else "inconclusive",
-                    target,
-                    "Expected object identity returned."
-                    if valid_identity
-                    else "Allowed control did not return its declared object identity.",
-                )
-        return observations
+                actual = pointer_value(data, resource.identity_pointer)
+                valid_identity = actual == owner.attributes[resource.owner_attr]
+            except (KeyError, IndexError, TypeError, ValueError):
+                valid_identity = False
+            report.add(
+                "api.object_control",
+                "pass" if valid_identity else "inconclusive",
+                target,
+                "Expected object identity returned."
+                if valid_identity
+                else "Allowed control did not return its declared object identity.",
+                case.id,
+            )
+    return observations
 
+
+def finalize_api(
+    prepared: PreparedAPI,
+    executed_cases: list[TestCase],
+    observations: list[Observation],
+    report: Report,
+    *,
+    require_full_coverage: bool = True,
+) -> None:
+    observed_ids = {observation.test_id for observation in observations}
+    if require_full_coverage and observed_ids != {case.id for case in prepared.cases}:
+        report.add(
+            "api.coverage",
+            "inconclusive",
+            "api",
+            "Some planned observations are missing.",
+        )
     try:
-        result = run_pipeline(
-            matrix, executor=executor, concurrency=1, read_only=True, max_retries=0
+        findings = classify(
+            prepared.matrix,
+            executed_cases,
+            observations,
+            base_url=prepared.config.base_url,
+        )
+        result = RunResult(
+            base_url=prepared.config.base_url,
+            cases=executed_cases,
+            observations=observations,
+            findings=findings,
         )
     except Exception:
         report.add("api.engine", "inconclusive", "api", "Overstep did not complete the run.")
         return
-    if result.coverage.unprobed:
-        report.add("api.coverage", "inconclusive", "api", "Some object boundaries were not probed.")
-    if len(result.observations) != len(cases):
-        report.add("api.coverage", "inconclusive", "api", "Some planned observations are missing.")
+    cases = {case.id: case for case in executed_cases}
     for finding in result.vulnerabilities:
+        case = cases.get(finding.test_id)
+        target = case_target(case) if case else (
+            f"{finding.resource}/{finding.subject}/{finding.variant.value}"
+        )
         report.add(
             "api." + finding.vuln_class.value,
             "fail",
-            f"{finding.resource}/{finding.subject}/{finding.variant.value}",
+            target,
             f"Expected denial; HTTP {finding.status}. Evidence: {finding.confidence}.",
+            finding.test_id,
         )
+
+
+def check_api(config: API, report: Report) -> None:
+    prepared = prepare_api(config, report)
+    if prepared is None:
+        return
+    observations = execute_api_cases(prepared, prepared.cases, report)
+    finalize_api(prepared, prepared.cases, observations, report)

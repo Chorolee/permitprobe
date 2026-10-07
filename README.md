@@ -238,6 +238,67 @@ are policy violations even if they belong to that account in the database. Empty
 and unusable IDs remain inconclusive. Matching IDs do not prove the provenance of the
 other fields or list completeness. Reports never include the observed IDs or values.
 
+Object resources use `api.probe_victims: "all"` by default. Every caller is checked
+against every authenticated subject's declared object, so a failure limited to one specific
+caller/owner pair is not hidden behind a representative victim. `"one"` remains an explicit
+lower-cost option; its report proves only those selected pairs. `max_cases` is checked before
+delivery and prevents an unexpectedly large full matrix from sending any requests.
+
+## Active AI exploration (unreleased; source checkout)
+
+The source checkout adds a bounded active explorer. The AI observes normalized results, forms
+hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains control of
+credentials, HTTP delivery, expected policy, classification, budgets, coverage and completion.
+The provider cannot create a URL, header, token, request body, shell command or tool call.
+
+Providers use a JSON-over-stdio protocol, so Astra, Claude, Gemini, local models, agent
+frameworks and deterministic programs can all use the same contract. The core contains no
+model-specific branch. See [exploration provider protocol v1](docs/exploration-provider-v1.md).
+
+```sh
+permitprobe explore my-security-checks/permitprobe.json \
+  --provider-command /absolute/path/to/provider-adapter \
+  --provider-name my-provider \
+  --state exploration-state.json \
+  --complete \
+  --report exploration-result.json
+```
+
+The deterministic baseline establishes positive controls and one representative cross-owner
+probe per caller/resource. Each provider round receives remaining normalized capabilities and
+prior observations, selects a bounded batch, and sees the new facts on the next round. With
+`--complete`, any remaining declared cases run deterministically. Without it, confirmed findings
+are retained but unprobed cases force exit `2`; a model's `done_hint` can never produce a pass.
+
+Additional routes can be authorized without making them part of ordinary regression checks by
+placing full `Resource` contracts in `api.exploration_resources`. They are absent from `check`
+and from the baseline, and become selectable capabilities only in `explore`. A model may also
+emit non-executable capability-gap proposals. A proposal must be converted into a strict policy
+entry before any later run can send it.
+
+The required state path is created privately and checkpointed atomically after the baseline and
+every round. Its graph distinguishes subjects, resources, planned cases, hypotheses, intents,
+observations, capability proposals and findings. Broken provider output, a timeout, repeated or
+unknown cases, missing evidence dependencies and exceeded budgets stop inconclusively.
+
+## Finding history and retests (unreleased; source checkout)
+
+Schema-version-2 reports contain stable finding IDs, owner-specific evidence IDs and coverage
+counts without response bodies or credentials. Retest one finding against the current policy:
+
+```sh
+permitprobe retest my-security-checks/permitprobe.json \
+  --prior-report exploration-result.json \
+  --finding pp-0123456789abcdef \
+  --output retest.json
+```
+
+The retest executes the finding's cases plus authenticated and anonymous controls. It records
+`reproduced`, `not_reproduced` or `inconclusive`. `fixed` requires the same successful controls
+and an explicit safe revision/deployment label such as `--change-ref deploy:abc123`; absence on
+one run alone is not called a fix. Prior reports remain unchanged and every retest carries its
+own lineage graph.
+
 ## Check and package an AI handoff
 
 ```sh
@@ -269,7 +330,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, bounded GET transport, per-identity positive controls, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
+| PermitProbe | Strict configuration, bounded GET transport, full owner-pair coverage, per-identity positive controls, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -296,7 +357,9 @@ has its own behavior and scope.
 | `2` | Configuration error or incomplete evidence; failures may also be present |
 
 `--format json` prints the versioned report. `--report path.json` additionally creates
-a local report file. Unconfigured surfaces are named explicitly. An empty run cannot pass.
+a local report file. Schema version 2 includes normalized evidence IDs, owner aliases,
+coverage and grouped findings; it still omits credential values, response bodies, redirect
+destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. Declared redirect responses are checked from their headers only.
@@ -314,8 +377,9 @@ cookie jars are not used. Declared redirect responses are checked from their hea
   caching, or write-path correctness. The tool never connects to a database in v0.1.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
   archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
-- Policy files, schemas, the installed dependencies, and the chosen scanner executable are
-  trusted. Reports retain configured labels and filenames; do not put secrets in those names.
+- Policy files, schemas, installed dependencies, scanner and exploration-provider executables
+  are trusted local inputs. Reports retain configured labels and filenames; do not put secrets
+  in those names.
 - GET handlers must actually be safe to call. Choose a staging target with synthetic fixtures.
 
 ## Development
@@ -343,10 +407,12 @@ deployed application automatically.
 | Linked API/storage cases | Does a document denied by its API remain readable through a direct object URL or another declared route? |
 | Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
-| Finding history and retests | Is a previously reproduced defect still present after a change, with valid credentials and a working positive control? |
+| Active discovery beyond declared capabilities | Which new route, query or protocol capability should an operator authorize for a later bounded run? |
 
-These are **not implemented in v0.1**. Each addition needs a known-vulnerable fixture,
-a fixed counterpart, and an incomplete-evidence case that must not pass.
+These are **not implemented in v0.1**. Finding history, bounded active exploration and
+declared exploration capabilities are available in the unreleased source described above.
+Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
+incomplete-evidence case that must not pass.
 
 ## Design reference: ARTEX
 
@@ -358,16 +424,16 @@ outcomes. See its [architecture](https://github.com/Autumn-27/ARTEX/blob/b55ceb1
 [retest model](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/db/finding_retests.go),
 and [evidence store](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/evidence/store.go).
 
-The proposed PermitProbe adaptation is a scoped workflow: inventory declared surfaces,
-identify a candidate, reproduce it with an executable check, retain safe evidence metadata,
-then rerun the same case after a fix. A future AI-assisted discovery layer would produce
-candidates; configured executable checks would decide the result. Any coverage view must
-keep untested surfaces visible. Response bodies and credentials would remain excluded from
-ordinary reports under this project's existing data-handling contract.
+The implemented source adaptation is a scoped workflow: inventory declared surfaces, build a
+deterministic baseline, let a model-neutral provider form evidence-linked hypotheses, validate
+its case selections, execute through the existing bounded transport, retain normalized lineage,
+and rerun a finding with comparable controls. Configured executable checks decide the result;
+provider prose and completion hints do not. Untested surfaces remain visible, and response bodies
+and credentials stay outside provider requests and ordinary reports.
 
 ARTEX's reviewed source is [AGPL-3.0](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/LICENSE).
 It is a **conceptual reference**, not an installed dependency or an imported implementation.
-No ARTEX code, prompts, screenshots, or other assets are copied into PermitProbe.
-This reference review does not claim to have run or audited ARTEX.
+No ARTEX code, prompts, screenshots, or other assets are copied into PermitProbe. The independent
+implementation does not claim compatibility with, endorsement by, or an audit of ARTEX.
 
 Apache-2.0. See [NOTICE](NOTICE), [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md).
