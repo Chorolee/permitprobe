@@ -151,6 +151,8 @@ exit `2`, with violations still listed in the report.
 For cookie sessions, use `cookie_env` instead of `token_env`. The environment value is
 the complete request Cookie header, such as the synthetic `session=example; theme=light`.
 Exactly one mechanism is required per authenticated subject; anonymous has neither.
+Use separate test accounts: different credential strings alone do not prove different
+authenticated identities, especially when Cookie headers differ only in preferences.
 Credentials are sent only to the configured origin. Responses cannot refresh a session
 or transfer cookies between identities. Expired sessions must be refreshed by the operator.
 Bearer authentication also works with collection rules.
