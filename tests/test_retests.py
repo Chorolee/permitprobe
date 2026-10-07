@@ -163,6 +163,7 @@ def test_anonymous_finding_cannot_be_fixed_without_same_endpoint_control(monkeyp
         anonymous["evidence_id"],
     )
     prior["findings"] = synthetic.finding_groups()
+    prior["checks"] = synthetic.to_dict()["checks"]
     calls = []
 
     async def unavailable_endpoint(
@@ -261,6 +262,7 @@ def test_prior_report_may_contain_a_nonexecutable_grouped_finding(tmp_path):
         "Synthetic finding without API evidence.",
     )
     prior["findings"].extend(auxiliary.finding_groups())
+    prior["checks"].extend(auxiliary.to_dict()["checks"])
     path = tmp_path / "combined-report.json"
     path.write_text(json.dumps(prior))
     loaded = load_prior_report(path)
@@ -268,3 +270,21 @@ def test_prior_report_may_contain_a_nonexecutable_grouped_finding(tmp_path):
         item["code"] == "handoff.secret" and item["evidence_ids"] == []
         for item in loaded["findings"]
     )
+
+
+def test_retest_rejects_substituted_finding_evidence_before_delivery():
+    prior, finding_id = prior_selective_finding()
+    benign_evidence = next(
+        item["evidence_id"]
+        for item in prior["evidence"]
+        if item["resource"] == "private-attachments"
+        and item["subject"] == "alice"
+        and item["owner"] == "bob"
+        and item["expected"] == "deny"
+        and item["observed"] == "deny"
+    )
+    finding = next(item for item in prior["findings"] if item["finding_id"] == finding_id)
+    finding["evidence_ids"] = [benign_evidence]
+
+    with pytest.raises(PolicyError, match="compatible prior"):
+        run_retest(Policy.model_validate(read_policy()).api, prior, finding_id)
