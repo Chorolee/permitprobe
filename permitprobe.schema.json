@@ -88,21 +88,61 @@
           "type": "string"
         },
         "owner_pointer": {
-          "maxLength": 512,
-          "minLength": 1,
-          "title": "Owner Pointer",
-          "type": "string"
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Pointer"
         },
         "owner_attr": {
-          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
-          "title": "Owner Attr",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Attr"
+        },
+        "item_pointer": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item Pointer"
+        },
+        "items_attr": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Items Attr"
         }
       },
       "required": [
-        "items_pointer",
-        "owner_pointer",
-        "owner_attr"
+        "items_pointer"
       ],
       "title": "Collection",
       "type": "object"
@@ -163,6 +203,49 @@
         "allow"
       ],
       "title": "Handoff",
+      "type": "object"
+    },
+    "Redirect": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": 302,
+          "enum": [
+            302,
+            303,
+            307,
+            308
+          ],
+          "title": "Status",
+          "type": "integer"
+        },
+        "origin": {
+          "maxLength": 512,
+          "title": "Origin",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "required_query": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Required Query",
+          "type": "array"
+        }
+      },
+      "required": [
+        "origin",
+        "path",
+        "required_query"
+      ],
+      "title": "Redirect",
       "type": "object"
     },
     "Resource": {
@@ -237,6 +320,22 @@
           ],
           "default": null
         },
+        "redirect": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Redirect"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "private_cache": {
+          "default": false,
+          "title": "Private Cache",
+          "type": "boolean"
+        },
         "allow": {
           "items": {
             "$ref": "#/$defs/Allow"
@@ -247,9 +346,17 @@
           "type": "array"
         },
         "response_schema": {
-          "additionalProperties": true,
-          "title": "Response Schema",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Schema"
         },
         "denial_schema": {
           "additionalProperties": true,
@@ -261,7 +368,6 @@
         "name",
         "path",
         "allow",
-        "response_schema",
         "denial_schema"
       ],
       "title": "Resource",
@@ -311,6 +417,17 @@
             "type": "string"
           },
           "title": "Attributes",
+          "type": "object"
+        },
+        "owned_items": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxProperties": 32,
+          "title": "Owned Items",
           "type": "object"
         },
         "marker": {

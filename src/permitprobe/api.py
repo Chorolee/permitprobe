@@ -19,12 +19,15 @@ from overstep.planner import plan
 
 from permitprobe.policy import API, _unique
 from permitprobe.report import Report
+from permitprobe.response_contracts import private_cache_matches, redirect_matches
 
 OVERSTEP_VERSION = "1.5.0"
 DENIAL_STATUSES = {401, 403, 404}
 
 
-async def fetch(url: str, headers: dict[str, str], config: API) -> tuple[int, str]:
+async def fetch(
+    url: str, headers: dict[str, str], config: API, redirect_status: int | None = None
+) -> tuple[int, str, httpx.Headers]:
     # Absolute deadline includes connect, headers, and a trickling response body.
     # A per-read socket timeout alone cannot bound a slow-drip server.
     async with asyncio.timeout(config.timeout_seconds):
@@ -33,6 +36,10 @@ async def fetch(url: str, headers: dict[str, str], config: API) -> tuple[int, st
             trust_env=False, follow_redirects=False, timeout=config.timeout_seconds
         ) as client:
             async with client.stream("GET", url, headers=headers) as response:
+                if response.status_code == redirect_status:
+                    # A declared redirect grant is fully observed in its headers.
+                    # Do not let an irrelevant/invalid body erase that evidence.
+                    return response.status_code, "", response.headers
                 if response.headers.get("content-encoding", "identity") != "identity":
                     raise ValueError("encoded response")
                 body = bytearray()
@@ -40,12 +47,14 @@ async def fetch(url: str, headers: dict[str, str], config: API) -> tuple[int, st
                     if len(body) + len(chunk) > config.max_response_bytes:
                         raise ValueError("response budget exceeded")
                     body.extend(chunk)
-                return response.status_code, body.decode("utf-8")
+                return response.status_code, body.decode("utf-8"), response.headers
 
 
 def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
-    if not resolve_tokens and any(s.cookie_env for s in config.subjects):
-        raise ValueError("cookie authentication cannot be exported as an Overstep bearer matrix")
+    if not resolve_tokens and (
+        any(s.cookie_env for s in config.subjects) or any(r.redirect for r in config.resources)
+    ):
+        raise ValueError("cookie and redirect contracts cannot be exported as an auth-only matrix")
     subjects = []
     seen_tokens = set()
     for s in config.subjects:
@@ -119,36 +128,47 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
         return
     foreign = 0
     unknown = 0
+    by_items = rule.items_attr is not None
+    expected = (
+        set(subject.owned_items[rule.items_attr])
+        if by_items
+        else {subject.attributes[rule.owner_attr]}
+    )
+    pointer = rule.item_pointer if by_items else rule.owner_pointer
     for item in items:
         try:
-            owner = pointer_value(item, rule.owner_pointer)
+            owner = pointer_value(item, pointer)
         except (KeyError, IndexError, TypeError, ValueError):
             owner = None
         if not isinstance(owner, str) or not owner.strip():
             unknown += 1
-        elif owner != subject.attributes[rule.owner_attr]:
+        elif owner not in expected:
             foreign += 1
     # Inspect every item: a malformed sibling must not hide a proven violation.
     if foreign:
         report.add(
-            "data.collection_owner",
+            "data.collection_items" if by_items else "data.collection_owner",
             "fail",
             target,
-            "Collection contains items owned by someone other than the requesting subject.",
+            "Collection contains IDs outside the subject's declared item set."
+            if by_items
+            else "Collection contains items owned by someone other than the requesting subject.",
         )
     if unknown:
         report.add(
             "data.collection_control",
             "inconclusive",
             target,
-            "Some collection items have no usable owner; ownership is unverified.",
+            "Some collection items have no usable identity; ownership is unverified.",
         )
     if not foreign and not unknown:
         report.add(
-            "data.collection_owner",
+            "data.collection_items" if by_items else "data.collection_owner",
             "pass",
             target,
-            "Every returned collection item belongs to the requesting subject.",
+            "Every returned item ID is in the subject's declared item set."
+            if by_items
+            else "Every returned collection item belongs to the requesting subject.",
         )
 
 
@@ -195,7 +215,9 @@ def check_api(config: API, report: Report) -> None:
             return
     resources = {r.name: r for r in config.resources}
     subjects = {s.name: s for s in config.subjects}
-    validators = {r.name: Draft202012Validator(r.response_schema) for r in config.resources}
+    validators = {
+        r.name: Draft202012Validator(r.response_schema) for r in config.resources if not r.redirect
+    }
     denial_validators = {r.name: Draft202012Validator(r.denial_schema) for r in config.resources}
 
     def executor(base_url, engine_subjects, planned, **_):
@@ -203,6 +225,8 @@ def check_api(config: API, report: Report) -> None:
         observations = []
         for case in planned:
             target = f"{case.resource}/{case.subject}/{case.variant.value}"
+            resource = resources[case.resource]
+            owner = subjects[case.victim or case.subject]
             headers = {"Accept": "application/json", "Accept-Encoding": "identity"}
             if tokens[case.subject]:
                 if subjects[case.subject].cookie_env:
@@ -210,7 +234,14 @@ def check_api(config: API, report: Report) -> None:
                 else:
                     headers["Authorization"] = "Bearer " + tokens[case.subject]
             try:
-                status, text = asyncio.run(fetch(base_url.rstrip("/") + case.path, headers, config))
+                status, text, response_headers = asyncio.run(
+                    fetch(
+                        base_url.rstrip("/") + case.path,
+                        headers,
+                        config,
+                        resource.redirect.status if resource.redirect else None,
+                    )
+                )
             except Exception:
                 report.add(
                     "api.delivery",
@@ -224,7 +255,16 @@ def check_api(config: API, report: Report) -> None:
                     )
                 )
                 continue
-            effect = Effect.ALLOW if 200 <= status < 300 else Effect.DENY
+            if resource.redirect:
+                is_grant = status == resource.redirect.status and redirect_matches(
+                    resource.redirect,
+                    response_headers,
+                    resource.owner_param,
+                    owner.attributes[resource.owner_attr],
+                )
+            else:
+                is_grant = 200 <= status < 300
+            effect = Effect.ALLOW if is_grant else Effect.DENY
             observations.append(
                 Observation(
                     test_id=case.id,
@@ -233,12 +273,14 @@ def check_api(config: API, report: Report) -> None:
                     matched_markers=[m for m in case.expect_markers if m and m in text],
                 )
             )
-            if not 200 <= status < 300 and status not in DENIAL_STATUSES:
+            if not is_grant and status not in DENIAL_STATUSES:
                 report.add(
-                    "api.unexpected_status",
+                    "api.redirect_control" if resource.redirect else "api.unexpected_status",
                     "inconclusive",
                     target,
-                    f"HTTP {status} does not establish an access-control decision.",
+                    f"HTTP {status} did not establish the declared redirect grant."
+                    if resource.redirect
+                    else f"HTTP {status} does not establish an access-control decision.",
                 )
                 continue
             if case.expected == effect:
@@ -256,6 +298,27 @@ def check_api(config: API, report: Report) -> None:
                     f"Allowed control returned HTTP {status}; identity is unverified.",
                 )
             # Unexpected allows are classified by Overstep below.
+            if is_grant and resource.private_cache:
+                valid_cache = private_cache_matches(
+                    response_headers,
+                    "Cookie" if subjects[case.subject].cookie_env else "Authorization",
+                )
+                report.add(
+                    "data.private_cache",
+                    "pass" if valid_cache else "fail",
+                    target,
+                    "Response matches the declared private-cache header contract."
+                    if valid_cache
+                    else "Response does not match the declared private-cache header contract.",
+                )
+            if is_grant and resource.redirect:
+                report.add(
+                    "api.redirect_control",
+                    "pass",
+                    target,
+                    "Location matches the pinned origin, object path and query shape; destination not fetched.",
+                )
+                continue
             try:
                 data = json.loads(
                     text,
@@ -283,7 +346,6 @@ def check_api(config: API, report: Report) -> None:
                 )
             else:
                 report.add(schema_code, "pass", target, "Response matches declared schema.")
-            resource = resources[case.resource]
             if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
                 check_collection(data, resource.collection, subjects[case.subject], report, target)
             if (

@@ -10,6 +10,7 @@ from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
 from permitprobe.handoff import check_handoff, write_bundle
 from permitprobe.policy import Policy, PolicyError, load_policy
+from permitprobe.read_demo import SCENARIOS, run_read_demo
 from permitprobe.report import Report
 
 
@@ -75,6 +76,10 @@ def parser() -> argparse.ArgumentParser:
     )
     collection.add_argument("--format", choices=("text", "json"), default="text")
     collection.add_argument("--report")
+    reads = commands.add_parser("demo-read-paths", help="Run synthetic file-grant and role cases")
+    reads.add_argument("--scenario", choices=SCENARIOS, default="safe")
+    reads.add_argument("--format", choices=("text", "json"), default="text")
+    reads.add_argument("--report")
     init = commands.add_parser("init", help="Create a starter in a NEW directory")
     init.add_argument("directory", type=Path)
     export = commands.add_parser(
@@ -108,6 +113,8 @@ def main(argv: list[str] | None = None) -> int:
             return emit(run_demo(args.scenario, args.gitleaks), args.format, args.report)
         if args.command == "demo-collection":
             return emit(run_collection_demo(args.scenario), args.format, args.report)
+        if args.command == "demo-read-paths":
+            return emit(run_read_demo(args.scenario), args.format, args.report)
         policy = load_policy(args.policy)
         if args.command == "export-overstep":
             if not policy.api:
