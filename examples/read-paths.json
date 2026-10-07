@@ -1,0 +1,298 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://staging.example.invalid",
+    "subjects": [
+      {
+        "name": "anon",
+        "role": "anonymous"
+      },
+      {
+        "name": "alice",
+        "role": "member",
+        "cookie_env": "PP_ALICE_COOKIE",
+        "attributes": {
+          "user_id": "alice"
+        },
+        "owned_items": {
+          "requests": [
+            "request-alice"
+          ]
+        }
+      },
+      {
+        "name": "bob",
+        "role": "member",
+        "cookie_env": "PP_BOB_COOKIE",
+        "attributes": {
+          "user_id": "bob"
+        },
+        "owned_items": {
+          "requests": [
+            "request-bob"
+          ]
+        }
+      },
+      {
+        "name": "moderator",
+        "role": "moderator",
+        "cookie_env": "PP_MODERATOR_COOKIE",
+        "attributes": {
+          "user_id": "moderator"
+        },
+        "owned_items": {
+          "requests": [
+            "request-moderator"
+          ]
+        }
+      },
+      {
+        "name": "admin",
+        "role": "admin",
+        "cookie_env": "PP_ADMIN_COOKIE",
+        "attributes": {
+          "user_id": "admin"
+        },
+        "owned_items": {
+          "requests": [
+            "request-admin"
+          ]
+        }
+      }
+    ],
+    "resources": [
+      {
+        "name": "private-attachments",
+        "path": "/attachments/{id}/private.png",
+        "kind": "object",
+        "owner_param": "id",
+        "owner_attr": "user_id",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "own"
+          },
+          {
+            "role": "moderator",
+            "scope": "own"
+          },
+          {
+            "role": "admin",
+            "scope": "own"
+          }
+        ],
+        "redirect": {
+          "status": 302,
+          "origin": "https://storage.example.invalid",
+          "path": "/signed/attachments/{id}/private.png",
+          "required_query": [
+            "token"
+          ]
+        },
+        "private_cache": true,
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      },
+      {
+        "name": "published-attachments",
+        "path": "/attachments/{id}/published.png",
+        "kind": "object",
+        "owner_param": "id",
+        "owner_attr": "user_id",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "any"
+          },
+          {
+            "role": "moderator",
+            "scope": "any"
+          },
+          {
+            "role": "admin",
+            "scope": "any"
+          }
+        ],
+        "redirect": {
+          "status": 302,
+          "origin": "https://storage.example.invalid",
+          "path": "/signed/attachments/{id}/published.png",
+          "required_query": [
+            "token"
+          ]
+        },
+        "private_cache": true,
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      },
+      {
+        "name": "applications",
+        "path": "/applications/{id}/document.pdf",
+        "kind": "object",
+        "owner_param": "id",
+        "owner_attr": "user_id",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "own"
+          },
+          {
+            "role": "moderator",
+            "scope": "own"
+          },
+          {
+            "role": "admin",
+            "scope": "any"
+          }
+        ],
+        "redirect": {
+          "status": 302,
+          "origin": "https://storage.example.invalid",
+          "path": "/signed/applications/{id}/document.pdf",
+          "required_query": [
+            "token"
+          ]
+        },
+        "private_cache": true,
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      },
+      {
+        "name": "verifications",
+        "path": "/verifications/{id}/document.pdf",
+        "kind": "object",
+        "owner_param": "id",
+        "owner_attr": "user_id",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "own"
+          },
+          {
+            "role": "moderator",
+            "scope": "any"
+          },
+          {
+            "role": "admin",
+            "scope": "any"
+          }
+        ],
+        "redirect": {
+          "status": 302,
+          "origin": "https://storage.example.invalid",
+          "path": "/signed/verifications/{id}/document.pdf",
+          "required_query": [
+            "token"
+          ]
+        },
+        "private_cache": true,
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      },
+      {
+        "name": "requests",
+        "path": "/requests",
+        "kind": "function",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "any"
+          },
+          {
+            "role": "moderator",
+            "scope": "any"
+          },
+          {
+            "role": "admin",
+            "scope": "any"
+          }
+        ],
+        "collection": {
+          "items_pointer": "/items",
+          "item_pointer": "/id",
+          "items_attr": "requests"
+        },
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "items"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "detail"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "detail": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

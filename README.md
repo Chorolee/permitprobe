@@ -162,6 +162,82 @@ Bearer authentication also works with collection rules.
 permitprobe check my-private-collection.json --format json
 ```
 
+## File grants and role boundaries (unreleased; source checkout)
+
+[examples/read-paths.json](examples/read-paths.json) covers private attachments,
+published attachments, application documents, verification documents, and private
+request lists with two members, a moderator, an administrator and an anonymous caller.
+The same settings can be adapted to your staging routes and seeded test objects.
+
+```sh
+permitprobe demo-read-paths --scenario safe             # exit 0
+permitprobe demo-read-paths --scenario private-leak     # exit 1
+permitprobe demo-read-paths --scenario moderator-leak   # exit 1
+permitprobe demo-read-paths --scenario collection-leak  # exit 1
+permitprobe demo-read-paths --scenario cache-leak       # exit 1
+permitprobe demo-read-paths --scenario wrong-location   # exit 2
+permitprobe demo-read-paths --scenario expired-auth     # exit 2
+```
+
+For a route that grants access by issuing a signed file URL, an object resource can
+replace its JSON `response_schema` and `identity_pointer` with an explicit redirect
+contract. `owner_param`, `owner_attr` and `denial_schema` are still required:
+
+```json
+"redirect": {
+  "status": 302,
+  "origin": "https://storage.example.invalid",
+  "path": "/signed/files/{id}/document.pdf",
+  "required_query": ["token"]
+},
+"private_cache": true
+```
+
+The Location must occur once and match the pinned origin (including port), exact
+owner-expanded path and declared query names. Each query name must occur once with
+a nonblank value; extra names, userinfo, fragments and ambiguous URLs are refused.
+Supported statuses are 302, 303, 307 and 308; select the one your route uses. A login
+redirect, wrong object or missing Location is inconclusive. Grant bodies are not read:
+a malformed or interrupted body cannot hide a grant already established by its headers.
+JSON success/denial bodies retain the usual size, encoding and schema checks.
+
+This establishes issuance of a **structurally matching URL**, not a working download.
+The destination is never requested; its signed token's signature and expiry are not
+verified. An expired token with the declared URL shape still counts as an issued grant.
+Locations, query values, cookies and response bodies are omitted from reports.
+
+Optional `private_cache: true` checks successful responses for a deliberately strict
+header contract: unqualified `no-store`, or unqualified `private` plus `Vary` naming
+the request's Cookie/Authorization header (or a lone `*`). `max-age` with an unquoted
+nonnegative integer, `no-cache`, `must-revalidate` and `no-transform` are the only other
+accepted directives. Public, shared, qualified, duplicate, unknown or contradictory
+directives fail this configured contract, including `must-understand`, which can
+override `no-store`. The rule checks headers only; actual cache behavior remains
+unverified. See [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.2).
+Denial responses do not run this optional header check.
+
+Lists that omit an owner field can instead use `collection.item_pointer` and
+`collection.items_attr`, with each subject declaring `owned_items`, for example:
+
+```json
+"owned_items": {"requests": ["request-alice-1", "request-alice-2"]}
+```
+
+```json
+"collection": {
+  "items_pointer": "/items",
+  "item_pointer": "/id",
+  "items_attr": "requests"
+}
+```
+
+Use exactly one collection mode. The operator supplies the complete allowed set for
+each test account; sets must be nonempty and disjoint. Every returned ID must belong
+to the requesting subject's set, but every seeded ID need not appear. Unlisted IDs
+are policy violations even if they belong to that account in the database. Empty lists
+and unusable IDs remain inconclusive. Matching IDs do not prove the provenance of the
+other fields or list completeness. Reports never include the observed IDs or values.
+
 ## Check and package an AI handoff
 
 ```sh
@@ -193,7 +269,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, bounded GET transport, per-identity positive controls, object identity checks, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
+| PermitProbe | Strict configuration, bounded GET transport, per-identity positive controls, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -207,8 +283,8 @@ permitprobe export-overstep my-security-checks/permitprobe.json --output matrix.
 
 The output is JSON, also valid YAML for Overstep, and retains `${TOKEN_ENV}` references.
 It does **not** include PermitProbe's JSON Schema checks, collection ownership checks,
-strict control rules, or handoff checks. Cookie policies cannot be exported as bearer
-matrices and are refused before creating an output file. Direct Overstep execution
+private-cache checks, strict control rules, or handoff checks. Cookie and redirect
+policies cannot be exported and are refused before creating an output file. Direct Overstep execution
 has its own behavior and scope.
 
 ## Exit codes and evidence
@@ -222,7 +298,8 @@ has its own behavior and scope.
 `--format json` prints the versioned report. `--report path.json` additionally creates
 a local report file. Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
-redirects, automatic login, fixture mutations, and shared cross-identity cookie jars are not used.
+redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
+cookie jars are not used. Declared redirect responses are checked from their headers only.
 
 ## Scope and limitations
 
