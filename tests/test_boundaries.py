@@ -55,7 +55,7 @@ def test_actual_http_boundaries(scenario, code, rule):
         report = Report()
         check_api(Policy.model_validate(example_policy(url)).api, report)
     assert report.exit_code == code, report.to_dict()
-    assert len(requests) == 5  # one anonymous, two own-object, two cross-owner
+    assert len(requests) == 6  # every caller against both declared owners
     assert all("Cookie" not in headers for _, _, headers in requests)
     if rule:
         assert any(c.code == rule and c.outcome != "pass" for c in report.checks)

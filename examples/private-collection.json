@@ -2,6 +2,7 @@
   "version": 1,
   "api": {
     "base_url": "https://staging.example.invalid",
+    "probe_victims": "all",
     "subjects": [
       {
         "name": "anon",

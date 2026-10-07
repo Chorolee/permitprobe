@@ -208,6 +208,12 @@ class API(Strict):
     base_url: str
     subjects: list[Subject] = Field(min_length=3, max_length=16)
     resources: list[Resource] = Field(min_length=1, max_length=32)
+    # Additional fully contracted surfaces authorized for the active explorer.
+    # Ordinary `check` ignores them; `explore` exposes them as bounded capabilities.
+    exploration_resources: list[Resource] = Field(default_factory=list, max_length=32)
+    # Probe every declared owner by default. A single representative victim can
+    # miss a conditional authorization bug that affects only one owner pair.
+    probe_victims: Literal["one", "all"] = "all"
     timeout_seconds: int = Field(default=5, ge=1, le=30)
     max_response_bytes: int = Field(default=1_000_000, ge=64, le=5_000_000)
     max_cases: int = Field(default=256, ge=1, le=1024)
@@ -217,7 +223,8 @@ class API(Strict):
         origin_key(self.base_url)
         if len({s.name for s in self.subjects}) != len(self.subjects):
             raise ValueError("duplicate subject")
-        if len({r.name for r in self.resources}) != len(self.resources):
+        all_resources = [*self.resources, *self.exploration_resources]
+        if len({r.name for r in all_resources}) != len(all_resources):
             raise ValueError("duplicate resource")
         anonymous = [s for s in self.subjects if s.role == "anonymous"]
         authenticated = [s for s in self.subjects if s.role != "anonymous"]
@@ -228,7 +235,7 @@ class API(Strict):
         if len({s.token_env or s.cookie_env for s in authenticated}) != len(authenticated):
             raise ValueError("authenticated subjects must use different credential references")
         roles = {s.role for s in self.subjects}
-        for r in self.resources:
+        for r in all_resources:
             if any(a.role not in roles for a in r.allow):
                 raise ValueError("policy references an unknown role")
             if r.kind == "object":

@@ -8,10 +8,12 @@ from permitprobe import __version__
 from permitprobe.api import check_api, compile_matrix
 from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
+from permitprobe.exploration import ExternalProvider, StateWriter, explore_api
 from permitprobe.handoff import check_handoff, write_bundle
 from permitprobe.policy import Policy, PolicyError, load_policy
 from permitprobe.read_demo import SCENARIOS, run_read_demo
 from permitprobe.report import Report
+from permitprobe.retest import load_prior_report, run_retest
 
 
 def emit(report: Report, fmt: str, output: str | None = None) -> int:
@@ -80,6 +82,34 @@ def parser() -> argparse.ArgumentParser:
     reads.add_argument("--scenario", choices=SCENARIOS, default="safe")
     reads.add_argument("--format", choices=("text", "json"), default="text")
     reads.add_argument("--report")
+    explore = commands.add_parser(
+        "explore", help="Run bounded active exploration through a model-neutral provider"
+    )
+    explore.add_argument("policy", type=Path)
+    explore.add_argument("--provider-command", required=True, type=Path)
+    explore.add_argument("--provider-arg", action="append", default=[])
+    explore.add_argument("--provider-env", action="append", default=[])
+    explore.add_argument("--provider-name", default="external")
+    explore.add_argument("--state", required=True, type=Path)
+    explore.add_argument("--max-rounds", type=int, default=4)
+    explore.add_argument("--batch-size", type=int, default=16)
+    explore.add_argument("--max-requests", type=int)
+    explore.add_argument("--provider-timeout", type=int, default=120)
+    explore.add_argument("--max-seconds", type=int, default=600)
+    explore.add_argument(
+        "--complete",
+        action="store_true",
+        help="After AI-selected rounds, run the remaining declared cases deterministically",
+    )
+    explore.add_argument("--format", choices=("text", "json"), default="text")
+    explore.add_argument("--report")
+    retest = commands.add_parser("retest", help="Rerun one retained finding with controls")
+    retest.add_argument("policy", type=Path)
+    retest.add_argument("--prior-report", required=True, type=Path)
+    retest.add_argument("--finding", required=True)
+    retest.add_argument("--output", required=True, type=Path)
+    retest.add_argument("--change-ref")
+    retest.add_argument("--format", choices=("text", "json"), default="text")
     init = commands.add_parser("init", help="Create a starter in a NEW directory")
     init.add_argument("directory", type=Path)
     export = commands.add_parser(
@@ -116,6 +146,47 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "demo-read-paths":
             return emit(run_read_demo(args.scenario), args.format, args.report)
         policy = load_policy(args.policy)
+        if args.command == "explore":
+            if not policy.api or args.state.exists():
+                raise PolicyError("explore needs an API policy and a new state path")
+            provider = ExternalProvider(
+                args.provider_name,
+                [str(args.provider_command), *args.provider_arg],
+                args.provider_env,
+            )
+            report = Report()
+            explore_api(
+                policy.api,
+                report,
+                provider,
+                max_rounds=args.max_rounds,
+                max_candidates_per_round=args.batch_size,
+                max_requests_total=args.max_requests,
+                provider_timeout_seconds=args.provider_timeout,
+                max_seconds_total=args.max_seconds,
+                complete=args.complete,
+                checkpoint=StateWriter(args.state).write,
+            )
+            return emit(report, args.format, args.report)
+        if args.command == "retest":
+            if not policy.api or args.output.exists():
+                raise PolicyError("retest needs an API policy and a new output path")
+            verdict, result = run_retest(
+                policy.api,
+                load_prior_report(args.prior_report),
+                args.finding,
+                change_ref=args.change_ref,
+            )
+            with args.output.open("x", encoding="utf-8") as handle:
+                json.dump(result, handle, indent=2)
+                handle.write("\n")
+            if args.format == "json":
+                print(json.dumps(result, indent=2))
+            else:
+                print(f"PermitProbe retest {verdict.upper()}: {args.finding}")
+            return {"fixed": 0, "reproduced": 1, "not_reproduced": 2, "inconclusive": 2}[
+                verdict
+            ]
         if args.command == "export-overstep":
             if not policy.api:
                 raise PolicyError("policy has no API surface")

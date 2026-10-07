@@ -25,6 +25,23 @@
           "title": "Resources",
           "type": "array"
         },
+        "exploration_resources": {
+          "items": {
+            "$ref": "#/$defs/Resource"
+          },
+          "maxItems": 32,
+          "title": "Exploration Resources",
+          "type": "array"
+        },
+        "probe_victims": {
+          "default": "all",
+          "enum": [
+            "one",
+            "all"
+          ],
+          "title": "Probe Victims",
+          "type": "string"
+        },
         "timeout_seconds": {
           "default": 5,
           "maximum": 30,

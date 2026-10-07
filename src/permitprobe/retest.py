@@ -1,0 +1,291 @@
+"""Deterministic finding retests with comparable controls and retained history."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from pathlib import Path
+from typing import Literal
+
+from overstep.models import Effect, TestCase, Variant
+
+from permitprobe.api import (
+    case_descriptor,
+    execute_api_cases,
+    finalize_api,
+    prepare_api,
+)
+from permitprobe.policy import API, PolicyError
+from permitprobe.report import Report
+
+MAX_PRIOR_REPORT_BYTES = 10_000_000
+RetestVerdict = Literal["reproduced", "fixed", "not_reproduced", "inconclusive"]
+
+
+def load_prior_report(path: Path) -> dict:
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(MAX_PRIOR_REPORT_BYTES + 1)
+        if len(raw) > MAX_PRIOR_REPORT_BYTES:
+            raise ValueError
+        data = json.loads(raw)
+        return _validate_prior_report(data)
+    except (OSError, ValueError, RecursionError):
+        raise PolicyError("cannot read a compatible prior PermitProbe report") from None
+
+
+def _validate_prior_report(data) -> dict:
+    try:
+        canonical = json.dumps(
+            data, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode()
+    except (TypeError, ValueError, RecursionError):
+        raise ValueError from None
+    if (
+        len(canonical) > MAX_PRIOR_REPORT_BYTES
+        or not isinstance(data, dict)
+        or data.get("schema_version") != 2
+        or not isinstance(data.get("policy_digest"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", data["policy_digest"])
+        or not isinstance(data.get("findings"), list)
+        or not isinstance(data.get("evidence"), list)
+        or data.get("exploration") is not None
+        and not isinstance(data.get("exploration"), dict)
+    ):
+        raise ValueError
+    evidence_ids = []
+    evidence_resources = {}
+    for item in data["evidence"]:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("evidence_id"), str)
+            or not isinstance(item.get("resource"), str)
+        ):
+            raise ValueError
+        evidence_ids.append(item["evidence_id"])
+        evidence_resources[item["evidence_id"]] = item["resource"]
+    if len(set(evidence_ids)) != len(evidence_ids):
+        raise ValueError
+    known_evidence = set(evidence_ids)
+    finding_ids = []
+    for finding in data["findings"]:
+        ids = finding.get("evidence_ids") if isinstance(finding, dict) else None
+        finding_id = finding.get("finding_id") if isinstance(finding, dict) else None
+        code = finding.get("code") if isinstance(finding, dict) else None
+        resource = finding.get("resource") if isinstance(finding, dict) else None
+        expected_id = None
+        if isinstance(code, str) and isinstance(resource, str):
+            key = f"{data['policy_digest']}\0{code}\0{resource}"
+            expected_id = "pp-" + hashlib.sha256(key.encode()).hexdigest()[:16]
+        if (
+            not isinstance(finding_id, str)
+            or finding_id != expected_id
+            or not isinstance(ids, list)
+            or any(not isinstance(item, str) for item in ids)
+            or len(set(ids)) != len(ids)
+            or not set(ids).issubset(known_evidence)
+            or any(evidence_resources[item] != resource for item in ids)
+        ):
+            raise ValueError
+        finding_ids.append(finding_id)
+    if len(set(finding_ids)) != len(finding_ids):
+        raise ValueError
+    return data
+
+
+def _positive_control(
+    cases: list[TestCase], subject: str, resource: str, excluded: set[str]
+) -> TestCase | None:
+    same = [
+        case
+        for case in cases
+        if case.subject == subject
+        and case.id not in excluded
+        and case.resource == resource
+        and case.expected == Effect.ALLOW
+        and case.variant in (Variant.SELF, Variant.NA)
+    ]
+    if same:
+        return same[0]
+    fallback = [
+        case
+        for case in cases
+        if case.subject == subject
+        and case.id not in excluded
+        and case.expected == Effect.ALLOW
+        and case.variant in (Variant.SELF, Variant.NA)
+    ]
+    return fallback[0] if fallback else None
+
+
+def select_retest_cases(cases: list[TestCase], finding: dict) -> list[TestCase]:
+    by_id = {case.id: case for case in cases}
+    evidence_ids = finding.get("evidence_ids")
+    if not isinstance(evidence_ids, list) or not evidence_ids:
+        raise PolicyError("finding has no executable evidence")
+    try:
+        original = [by_id[item] for item in evidence_ids]
+    except (KeyError, TypeError):
+        raise PolicyError("finding evidence is not present in the current policy") from None
+    selected = {case.id: case for case in original}
+    original_ids = set(selected)
+    subjects = {case.subject for case in original if case.role != "anonymous"}
+    subjects.update(case.victim for case in original if case.victim)
+    for subject in sorted(subjects):
+        related = next(
+            (case for case in original if subject in (case.subject, case.victim)), original[0]
+        )
+        control = _positive_control(cases, subject, related.resource, original_ids)
+        if control is None:
+            raise PolicyError("finding cannot be retested without a positive control")
+        selected[control.id] = control
+    for resource in sorted({case.resource for case in original}):
+        if any(
+            case.resource == resource
+            and case.expected == Effect.ALLOW
+            and case.variant in (Variant.SELF, Variant.NA)
+            for case in selected.values()
+        ):
+            continue
+        endpoint_control = next(
+            (
+                case
+                for case in cases
+                if case.resource == resource
+                and case.id not in original_ids
+                and case.expected == Effect.ALLOW
+                and case.variant in (Variant.SELF, Variant.NA)
+            ),
+            None,
+        )
+        if endpoint_control is None:
+            raise PolicyError("finding cannot be retested without an endpoint control")
+        selected[endpoint_control.id] = endpoint_control
+    for case in original:
+        anonymous = next(
+            (
+                item
+                for item in cases
+                if item.role == "anonymous"
+                and item.resource == case.resource
+                and item.expected == Effect.DENY
+                and (
+                    case.victim is None
+                    or item.victim == case.victim
+                    or item.victim == case.subject
+                )
+            ),
+            None,
+        )
+        if anonymous:
+            selected[anonymous.id] = anonymous
+    return [case for case in cases if case.id in selected]
+
+
+def run_retest(
+    config: API,
+    prior: dict,
+    finding_id: str,
+    *,
+    change_ref: str | None = None,
+) -> tuple[RetestVerdict, dict]:
+    try:
+        prior = _validate_prior_report(prior)
+    except ValueError:
+        raise PolicyError("cannot read a compatible prior PermitProbe report") from None
+    if change_ref is not None and (
+        not 1 <= len(change_ref) <= 256
+        or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:/@~-]*", change_ref)
+    ):
+        raise PolicyError("change reference must be a safe deployment or revision label")
+    finding = next(
+        (item for item in prior["findings"] if item.get("finding_id") == finding_id), None
+    )
+    if finding is None:
+        raise PolicyError("finding does not exist in the prior report")
+    report = Report()
+    prepared = prepare_api(
+        config,
+        report,
+        include_exploration=prior.get("exploration") is not None,
+    )
+    if prepared is None:
+        verdict: RetestVerdict = "inconclusive"
+        selected = []
+    elif prior["policy_digest"] != report.policy_digest:
+        report.add(
+            "retest.policy",
+            "inconclusive",
+            "retest",
+            "The current policy differs from the finding's original policy.",
+        )
+        verdict = "inconclusive"
+        selected = []
+    else:
+        selected = select_retest_cases(prepared.cases, finding)
+        report.planned_cases = {case.id: case_descriptor(case) for case in selected}
+        observations = execute_api_cases(prepared, selected, report)
+        finalize_api(
+            prepared,
+            selected,
+            observations,
+            report,
+            require_full_coverage=False,
+        )
+        current_ids = {item["finding_id"] for item in report.finding_groups()}
+        if report.exit_code == 2:
+            verdict = "inconclusive"
+        elif finding_id in current_ids:
+            verdict = "reproduced"
+        elif report.exit_code != 0:
+            verdict = "inconclusive"
+        elif change_ref:
+            verdict = "fixed"
+        else:
+            verdict = "not_reproduced"
+    prior_digest = hashlib.sha256(
+        json.dumps(prior, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    graph_nodes = [
+        {"id": "finding:" + finding_id, "kind": "finding", "source": "prior_report"},
+        {"id": "retest:" + prior_digest[:16], "kind": "retest", "verdict": verdict},
+    ]
+    graph_edges = [
+        {
+            "from": "finding:" + finding_id,
+            "to": "retest:" + prior_digest[:16],
+            "kind": "retested_by",
+        }
+    ]
+    if change_ref:
+        graph_nodes.append({"id": "change:" + change_ref, "kind": "change"})
+        graph_edges.append(
+            {
+                "from": "change:" + change_ref,
+                "to": "retest:" + prior_digest[:16],
+                "kind": "evaluated_by",
+            }
+        )
+    for case in selected:
+        oid = "observation:" + case.id
+        graph_nodes.append({"id": oid, "kind": "observation", "case_id": case.id})
+        graph_edges.append(
+            {
+                "from": oid,
+                "to": "retest:" + prior_digest[:16],
+                "kind": "supports",
+            }
+        )
+    result = {
+        "schema_version": 1,
+        "finding_id": finding_id,
+        "verdict": verdict,
+        "change_ref": change_ref,
+        "prior_report_digest": prior_digest,
+        "policy_digest": report.policy_digest,
+        "selected_case_ids": [case.id for case in selected],
+        "graph": {"nodes": graph_nodes, "edges": graph_edges},
+        "report": report.to_dict(),
+    }
+    return verdict, result

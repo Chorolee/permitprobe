@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 
@@ -23,6 +24,7 @@ from permitprobe.report import Report
     [
         ("safe", 0, "api.redirect_control"),
         ("private-leak", 1, "api.BOLA"),
+        ("selective-owner-leak", 1, "api.BOLA"),
         ("moderator-leak", 1, "api.BOLA"),
         ("collection-leak", 1, "data.collection_items"),
         ("cache-leak", 1, "data.private_cache"),
@@ -44,15 +46,15 @@ def test_file_role_and_collection_boundaries(scenario, expected, code):
         check_api(Policy.model_validate(read_policy(url)).api, report)
     assert report.exit_code == expected, report.to_dict()
     assert any(c.code == code for c in report.checks)
-    assert len(requests) == 41
+    assert len(requests) == 85
     assert all("/signed" not in path for _, path, _ in requests)
     assert all("injected" not in h.get("Cookie", "") for _, _, h in requests)
     assert all("Authorization" not in h for _, _, h in requests)
     if scenario == "safe":
         for target in (
-            "applications/moderator/other",
-            "verifications/moderator/other",
-            "applications/admin/other",
+            "applications/moderator/other/alice",
+            "verifications/moderator/other/alice",
+            "applications/admin/other/alice",
         ):
             assert any(
                 c.target == target and c.code == "api.authorization" and c.outcome == "pass"
@@ -60,7 +62,12 @@ def test_file_role_and_collection_boundaries(scenario, expected, code):
             )
     if scenario == "moderator-leak":
         assert any(
-            c.target == "applications/moderator/other" and c.outcome == "fail"
+            c.target.startswith("applications/moderator/other/") and c.outcome == "fail"
+            for c in report.checks
+        )
+    if scenario == "selective-owner-leak":
+        assert any(
+            c.target == "private-attachments/bob/other/moderator" and c.outcome == "fail"
             for c in report.checks
         )
     if scenario in ("collection-leak", "malformed-and-foreign"):
@@ -180,3 +187,58 @@ def test_read_demo_cli(scenario, expected, capsys):
 def test_read_example_matches_implementation():
     root = Path(__file__).resolve().parents[1]
     assert json.loads((root / "examples/read-paths.json").read_text()) == read_policy()
+
+
+def test_full_owner_matrix_has_distinct_private_evidence_and_grouped_finding():
+    with read_server("selective-owner-leak") as (url, _), read_environment():
+        report = Report()
+        check_api(Policy.model_validate(read_policy(url)).api, report)
+    payload = report.to_dict()
+    assert payload["schema_version"] == 2
+    assert payload["coverage"] == {"planned": 85, "observed": 85, "unprobed": []}
+    ids = [item["evidence_id"] for item in payload["evidence"]]
+    assert len(ids) == len(set(ids)) == 85
+    finding = next(item for item in payload["findings"] if item["code"] == "api.BOLA")
+    assert finding["occurrences"] == 1
+    evidence = next(
+        item for item in payload["evidence"] if item["evidence_id"] in finding["evidence_ids"]
+    )
+    assert (evidence["subject"], evidence["owner"]) == ("bob", "moderator")
+
+
+def test_single_victim_mode_is_explicitly_lower_coverage():
+    policy = read_policy()
+    policy["api"]["probe_victims"] = "one"
+    with read_server("selective-owner-leak") as (url, requests), read_environment():
+        policy["api"]["base_url"] = url
+        report = Report()
+        check_api(Policy.model_validate(policy).api, report)
+    assert len(requests) == 41
+    assert report.exit_code == 0
+    assert not any(check.code == "api.BOLA" for check in report.checks)
+
+
+def test_full_owner_matrix_respects_case_budget_before_delivery():
+    policy = read_policy()
+    policy["api"]["max_cases"] = 84
+    with read_server("safe") as (url, requests), read_environment():
+        policy["api"]["base_url"] = url
+        report = Report()
+        check_api(Policy.model_validate(policy).api, report)
+    assert not requests
+    assert report.exit_code == 2
+    assert any(check.code == "api.coverage" for check in report.checks)
+
+
+@pytest.mark.parametrize("problem", ["duplicate", "unknown-role"])
+def test_exploration_resources_share_primary_policy_validation(problem):
+    policy = read_policy()
+    candidate = copy.deepcopy(policy["api"]["resources"][0])
+    if problem == "duplicate":
+        pass
+    else:
+        candidate["name"] = "candidate-private"
+        candidate["allow"] = [{"role": "unconfigured-role", "scope": "any"}]
+    policy["api"]["exploration_resources"] = [candidate]
+    with pytest.raises(ValidationError):
+        Policy.model_validate(policy)
