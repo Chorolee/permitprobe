@@ -83,7 +83,9 @@ must add a fully contracted entry to `api.exploration_resources` before a later 
 select it.
 
 The reply's `candidates` array must not exceed `max_candidates`; the included reply schema carries
-the same dynamic `maxItems`. Unknown or repeated cases, missing dependencies, over-budget batches, broken JSON, an adapter
+the same dynamic `maxItems`. Every `depends_on` value must be an `evidence_id` already present in
+the request's `observations`; a candidate from the same reply is not prior evidence. Unknown or
+repeated cases, missing dependencies, over-budget batches, broken JSON, an adapter
 error, or a timeout stop exploration as inconclusive. `done_hint` is advisory: it cannot hide
 unprobed cases or produce a clean result. With `--complete`, PermitProbe runs the remaining
 authorized catalogue deterministically after successful provider rounds. Without it, confirmed

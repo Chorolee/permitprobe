@@ -325,6 +325,7 @@ def provider_request(
         "candidate_schema": candidate_schema,
         "rules": {
             "case_ids_only": True,
+            "dependencies_must_reference_prior_observations": True,
             "provider_never_executes_target_requests": True,
             "done_hint_is_advisory": True,
         },
