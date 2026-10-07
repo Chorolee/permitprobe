@@ -298,7 +298,10 @@ def provider_request(
     round_id: int,
     remaining_rounds: int,
     remaining_requests: int,
+    max_candidates: int,
 ) -> dict:
+    candidate_schema = ExplorationReply.model_json_schema()
+    candidate_schema["properties"]["candidates"]["maxItems"] = max_candidates
     return {
         "protocol_version": 1,
         "run_id": run_id,
@@ -307,6 +310,7 @@ def provider_request(
         "policy_digest": report.policy_digest,
         "remaining_rounds": remaining_rounds,
         "remaining_requests": remaining_requests,
+        "max_candidates": max_candidates,
         "capabilities": [case_descriptor(case) for case in remaining],
         "observations": [asdict(item) for item in report.evidence.values()],
         "checks": [
@@ -318,7 +322,7 @@ def provider_request(
             }
             for check in report.checks
         ],
-        "candidate_schema": ExplorationReply.model_json_schema(),
+        "candidate_schema": candidate_schema,
         "rules": {
             "case_ids_only": True,
             "provider_never_executes_target_requests": True,
@@ -578,6 +582,11 @@ def explore_api(
             round_id=round_id,
             remaining_rounds=max_rounds - round_id + 1,
             remaining_requests=request_budget - len(executed),
+            max_candidates=min(
+                max_candidates_per_round,
+                request_budget - len(executed),
+                len(remaining),
+            ),
         )
         try:
             reply = ExplorationReply.model_validate(

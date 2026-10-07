@@ -81,6 +81,8 @@ def test_provider_feedback_finds_selective_owner_pair_without_direct_target_acce
     assert len(provider.requests) == 2
     assert provider.requests[0]["run_id"] == provider.requests[1]["run_id"]
     assert provider.requests[0]["run_id"].startswith("run-")
+    assert provider.requests[0]["max_candidates"] == 1
+    assert provider.requests[0]["candidate_schema"]["properties"]["candidates"]["maxItems"] == 1
     selected_id = provider.requests[0]["capabilities"][
         next(
             index

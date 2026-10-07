@@ -42,7 +42,7 @@ the last completed evidence state available without turning the run into a pass.
 The request contains:
 
 - `protocol_version`, `run_id`, `round_id`, and a digest of the policy contract;
-- remaining round and request budgets;
+- remaining round and request budgets plus `max_candidates`, the exact current-round batch cap;
 - normalized capability records: case ID, resource, subject, owner alias, role, variant,
   expected effect, and method;
 - normalized prior observations and check outcomes;
@@ -82,7 +82,8 @@ and retest hypotheses. A proposal describes a capability gap but is never execut
 must add a fully contracted entry to `api.exploration_resources` before a later provider can
 select it.
 
-Unknown or repeated cases, missing dependencies, over-budget batches, broken JSON, an adapter
+The reply's `candidates` array must not exceed `max_candidates`; the included reply schema carries
+the same dynamic `maxItems`. Unknown or repeated cases, missing dependencies, over-budget batches, broken JSON, an adapter
 error, or a timeout stop exploration as inconclusive. `done_hint` is advisory: it cannot hide
 unprobed cases or produce a clean result. With `--complete`, PermitProbe runs the remaining
 authorized catalogue deterministically after successful provider rounds. Without it, confirmed
