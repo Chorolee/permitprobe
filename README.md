@@ -4,8 +4,8 @@
 
 Open-source defensive security CLI for testing API authorization, response-data boundaries, and AI handoff exposure.
 
-Maintainer: @Chorolee<br>
-Security Maintainer: @Chorolee<br>
+Maintainer: Susan (@Chorolee)<br>
+Security Maintainer: Susan (@Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
 License: Apache-2.0 · Current release: [v0.1.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.1.1)
