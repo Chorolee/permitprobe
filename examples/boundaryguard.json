@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://staging.example.invalid",
+    "subjects": [
+      {
+        "name": "anon",
+        "role": "anonymous"
+      },
+      {
+        "name": "alice",
+        "role": "user",
+        "token_env": "BG_ALICE_TOKEN",
+        "attributes": {
+          "document_id": "alice"
+        },
+        "marker": "alice"
+      },
+      {
+        "name": "bob",
+        "role": "user",
+        "token_env": "BG_BOB_TOKEN",
+        "attributes": {
+          "document_id": "bob"
+        },
+        "marker": "bob"
+      }
+    ],
+    "resources": [
+      {
+        "name": "documents",
+        "kind": "object",
+        "path": "/documents/{id}",
+        "owner_param": "id",
+        "owner_attr": "document_id",
+        "identity_pointer": "/id",
+        "allow": [
+          {
+            "role": "user",
+            "scope": "own"
+          }
+        ],
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "id",
+            "title"
+          ],
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "properties": {
+            "error": {
+              "enum": [
+                "denied"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    ]
+  },
+  "handoff": {
+    "root": ".",
+    "files": [
+      "review.txt"
+    ],
+    "allow": [
+      "*.txt",
+      "docs/*.md"
+    ]
+  }
+}

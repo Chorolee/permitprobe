@@ -1,0 +1,322 @@
+{
+  "$defs": {
+    "API": {
+      "additionalProperties": false,
+      "properties": {
+        "base_url": {
+          "title": "Base Url",
+          "type": "string"
+        },
+        "subjects": {
+          "items": {
+            "$ref": "#/$defs/Subject"
+          },
+          "maxItems": 16,
+          "minItems": 3,
+          "title": "Subjects",
+          "type": "array"
+        },
+        "resources": {
+          "items": {
+            "$ref": "#/$defs/Resource"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Resources",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 5,
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "default": 1000000,
+          "maximum": 5000000,
+          "minimum": 64,
+          "title": "Max Response Bytes",
+          "type": "integer"
+        },
+        "max_cases": {
+          "default": 256,
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Max Cases",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base_url",
+        "subjects",
+        "resources"
+      ],
+      "title": "API",
+      "type": "object"
+    },
+    "Allow": {
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Role",
+          "type": "string"
+        },
+        "scope": {
+          "default": "any",
+          "enum": [
+            "own",
+            "any"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role"
+      ],
+      "title": "Allow",
+      "type": "object"
+    },
+    "Handoff": {
+      "additionalProperties": false,
+      "properties": {
+        "root": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Root",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 256,
+          "minItems": 1,
+          "title": "Files",
+          "type": "array"
+        },
+        "allow": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Allow",
+          "type": "array"
+        },
+        "deny": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Deny",
+          "type": "array"
+        },
+        "max_file_bytes": {
+          "default": 1000000,
+          "maximum": 5000000,
+          "minimum": 1,
+          "title": "Max File Bytes",
+          "type": "integer"
+        },
+        "max_total_bytes": {
+          "default": 10000000,
+          "maximum": 50000000,
+          "minimum": 1,
+          "title": "Max Total Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "root",
+        "files",
+        "allow"
+      ],
+      "title": "Handoff",
+      "type": "object"
+    },
+    "Resource": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "kind": {
+          "default": "object",
+          "enum": [
+            "object",
+            "function"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "owner_param": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Param"
+        },
+        "owner_attr": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Attr"
+        },
+        "identity_pointer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Identity Pointer"
+        },
+        "allow": {
+          "items": {
+            "$ref": "#/$defs/Allow"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Allow",
+          "type": "array"
+        },
+        "response_schema": {
+          "additionalProperties": true,
+          "title": "Response Schema",
+          "type": "object"
+        },
+        "denial_schema": {
+          "additionalProperties": true,
+          "title": "Denial Schema",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "allow",
+        "response_schema",
+        "denial_schema"
+      ],
+      "title": "Resource",
+      "type": "object"
+    },
+    "Subject": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Role",
+          "type": "string"
+        },
+        "token_env": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token Env"
+        },
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Attributes",
+          "type": "object"
+        },
+        "marker": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Marker"
+        }
+      },
+      "required": [
+        "name",
+        "role"
+      ],
+      "title": "Subject",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "api": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/API"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "handoff": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Handoff"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "version"
+  ],
+  "title": "Policy",
+  "type": "object"
+}

@@ -1,0 +1,22 @@
+# Security policy
+
+BoundaryGuard is an early security testing tool. Version 0.1.x is the current supported
+line. Report suspected security defects through this repository's private vulnerability
+reporting channel (Security → Report a vulnerability). If that channel is unavailable,
+contact the maintainer on GitHub to arrange a private report before sharing sensitive details.
+Do not include real credentials, response bodies, or customer data in public issues.
+
+The threat model and current coverage limits are in the README. A passing check applies
+only to configured cases and captured files; it does not certify a service or authorize
+an external transfer. Test only systems you operate or are authorized to test.
+
+Sensitive handling rules:
+
+- Credentials enter through named environment variables and are not persisted in reports.
+- Response bodies and raw scanner output must never reach BoundaryGuard reports.
+- Unknown outcomes, missing tools, missing files, and failed controls must not pass.
+- No automatic remediation, production writes, deployment, or external upload.
+- Dependency updates must retain known-bad and known-good regression fixtures.
+
+The dependency executables and configuration are trusted inputs. This project does not
+claim to contain malicious local programs or protect a machine compromised by its owner.

@@ -1,0 +1,18 @@
+BoundaryGuard
+Copyright 2026 BoundaryGuard contributors
+
+BoundaryGuard is independently implemented and uses third-party software:
+
+- Overstep 1.5.0, https://github.com/kabiri-labs/overstep (Apache-2.0)
+  Copyright and notices remain with its authors. Installed as a dependency.
+- Gitleaks 8.30.1, https://github.com/gitleaks/gitleaks (MIT)
+  Invoked as a separately installed executable; not bundled in this repository.
+- jsonschema, https://github.com/python-jsonschema/jsonschema (MIT)
+  Installed as a dependency.
+
+Each dependency retains its own license and notices. The repository contains
+synthetic demonstrations, not production data, credentials, or private source.
+
+Related work considered for later adapters:
+Supabase Test Helpers (MIT) and rlsautotest (Apache-2.0).
+Neither is included in, or required by, the current implementation.

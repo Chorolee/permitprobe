@@ -1,0 +1,173 @@
+# BoundaryGuard
+
+**Test who can read your API, what data it returns, and which files leave in an AI handoff.**
+
+BoundaryGuard is an early open-source CLI for small teams running data-backed services.
+It turns an explicit policy into repeatable checks and a local, machine-readable report.
+It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization planning and
+classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
+contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
+
+Version **0.1.0** supports GET-only JSON REST APIs and explicit UTF-8 text-file handoffs on
+Linux/macOS. A passing result applies only to the declared cases and scanned bytes.
+
+## Try the working demo
+
+Python 3.11+ is required. From this repository:
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -c requirements.lock -e '.[dev]'
+python scripts/install_gitleaks.py
+
+boundaryguard demo --scenario safe --gitleaks .tools/gitleaks
+boundaryguard demo --scenario leaky --gitleaks .tools/gitleaks
+boundaryguard demo --scenario expired --gitleaks .tools/gitleaks
+```
+
+The demos start an ephemeral server on literal loopback and use synthetic credentials
+and documents. They do not contact an application or a database.
+
+| Scenario | Expected exit | What it demonstrates |
+| --- | --- | --- |
+| `safe` | `0` | Both users can read their own document; cross-owner reads are denied; fields and handoff match policy |
+| `leaky` | `1` | Cross-owner access, an extra private response field, and a synthetic token in a handoff are detected |
+| `schema-leak` | `1` | Authorization can be correct while the response exposes an extra field |
+| `expired` | `2` | One user's working credential cannot hide another user's failed positive control |
+| `server-error` | `2` | A server error on a negative test is not evidence that authorization worked |
+
+Exit `1` and `2` in the last examples are intentional. No response bodies, token values,
+file contents, or raw scanner diagnostics are included in BoundaryGuard reports.
+
+## Check your own staging API
+
+```sh
+boundaryguard init my-security-checks
+```
+
+Edit `my-security-checks/boundaryguard.json`:
+
+- Set the HTTPS origin of a target you operate. HTTP is accepted only for literal loopback.
+- Name one anonymous identity and at least two authenticated identities with distinct objects.
+- Point `token_env` at environment variables containing the corresponding bearer tokens.
+  BoundaryGuard does not read dotenv files, create users, or obtain credentials.
+- Declare each resource's allowed roles and `own`/`any` scope.
+- For object resources, name the URL parameter, identity attribute, and JSON pointer that
+  proves a successful response actually returned the intended object.
+- Set `response_schema` and `denial_schema` for successful and refused responses.
+  Close objects with `additionalProperties: false`, including nested objects, when all
+  undeclared fields must be forbidden. The starter also constrains denial error values.
+- Select only the text files intended for an AI handoff. Paths are relative to `handoff.root`,
+  itself relative to the policy file. They are never inferred from the whole repository.
+
+After supplying the token variables through your normal local credential mechanism:
+
+```sh
+boundaryguard check my-security-checks/boundaryguard.json \
+  --gitleaks .tools/gitleaks --report result.json
+```
+
+The starter origin is a non-working `example.invalid` placeholder. A missing token,
+unreachable target, unsupported response, failed control, or missing scanner exits `2`.
+Reports and exports are created exclusively; existing files are not overwritten.
+
+Use `boundaryguard schema` to print the policy's JSON Schema. Unknown policy keys,
+duplicate JSON keys, reused object IDs, and reused token references are rejected.
+`examples/boundaryguard.json` is a complete configuration with synthetic placeholders.
+
+## Check and package an AI handoff
+
+```sh
+boundaryguard bundle my-security-checks/boundaryguard.json \
+  --gitleaks .tools/gitleaks --output reviewed-handoff.zip
+```
+
+`bundle` checks the **handoff surface only** and makes no API requests. Its report states
+that API/data surfaces were not checked. It captures each named file, checks the captured
+bytes with Gitleaks, and only emits a ZIP when all handoff checks pass. The ZIP contains a
+SHA256 manifest and those exact bytes, even if source files change afterward. Nothing is
+uploaded or sent to an agent. Send the checked archive, not a re-read of the original tree.
+
+The built-in boundary refuses dotenv files, private-key files, credential directories,
+Git/private-memory directories, symlinks, hard links, non-regular files, binary content,
+path traversal, and configured size overruns. User deny patterns win over allow patterns;
+neither can override the built-in exclusions. Glob patterns match the whole POSIX path,
+and `*` can cross directory separators. Include specific files rather than a broad `*`.
+
+Scanner configuration and inline `gitleaks:allow` comments in a payload cannot suppress
+the scan. Gitleaks runs with a small explicit environment, without inherited credentials
+or configuration overrides. It receives neutral filenames and private temporary files.
+These controls are a preflight check, not a sandbox for a malicious scanner executable.
+
+## What is reused, and what BoundaryGuard adds
+
+| Component | Responsibility |
+| --- | --- |
+| Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
+| JSON Schema / `jsonschema` | Validate nested JSON response contracts |
+| Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
+| BoundaryGuard | Strict configuration, bounded GET transport, per-identity positive controls, object identity checks, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
+
+The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
+the tested Python dependency versions. Engine updates must pass the regression fixtures.
+No code from a source-available-only security product is embedded here.
+
+An auth-only matrix can be exported for direct use with Overstep:
+
+```sh
+boundaryguard export-overstep my-security-checks/boundaryguard.json --output matrix.json
+```
+
+The output is JSON, also valid YAML for Overstep, and retains `${TOKEN_ENV}` references.
+It does **not** include BoundaryGuard's JSON Schema checks, strict control rules, or
+handoff checks. Direct Overstep execution has its own behavior and scope.
+
+## Exit codes and evidence
+
+| Exit | Meaning |
+| --- | --- |
+| `0` | Every configured check completed and passed |
+| `1` | At least one policy violation; no incomplete checks |
+| `2` | Configuration error or incomplete evidence; failures may also be present |
+
+`--format json` prints the versioned report. `--report path.json` additionally creates
+a local report file. Unconfigured surfaces are named explicitly. An empty run cannot pass.
+Responses are consumed only in memory and capped in size/time. Proxy environment variables,
+redirects, automatic login, fixture mutations, and shared cross-identity cookie jars are not used.
+
+## Scope and limitations
+
+- Only declared GET cases are tested. This is not a full application security audit.
+- A forbidden `2xx` response is an access-policy violation; content markers can strengthen
+  evidence, but a status code alone does not prove a particular secret was disclosed.
+- The owner must supply the intended policy, real test identities, and existing test objects.
+  A wrong policy or overly permissive JSON Schema can produce misleading conclusions.
+- JSON Schemas are inline Draft 2020-12; reference resolution and format enforcement are
+  not supported. Denial responses must also be valid JSON matching their declared schema.
+- These are API observations, **not** a proof of database grants, RLS, storage, GraphQL,
+  caching, or write-path correctness. The tool never connects to a database in v0.1.
+- Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
+  archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
+- Policy files, schemas, the installed dependencies, and the chosen scanner executable are
+  trusted. Reports retain configured labels and filenames; do not put secrets in those names.
+- GET handlers must actually be safe to call. Choose a staging target with synthetic fixtures.
+
+## Development
+
+```sh
+python -m pytest -q
+ruff check src tests scripts
+python -m build
+```
+
+Tests use real loopback HTTP and the installed Gitleaks binary. Missing Gitleaks fails the
+suite rather than silently skipping secret-detection tests. Set `BOUNDARYGUARD_GITLEAKS`
+to an absolute binary path when it is not at `.tools/gitleaks`.
+
+Next milestones: a Supabase/pgTAP adapter with positive/negative database controls;
+linked API/storage access fixtures; explicit authorization drift baselines; and an MCP
+adapter. These are roadmap items, not current capabilities. Contributions should bring
+a safe fixture that fails before the fix and passes after it.
+
+Apache-2.0. See [NOTICE](NOTICE), [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md).

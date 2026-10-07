@@ -1,0 +1,5 @@
+include AGENTS.md CONTRIBUTING.md SECURITY.md NOTICE LICENSE
+include requirements.lock boundaryguard.schema.json
+recursive-include examples *.json *.txt
+recursive-include scripts *.py
+recursive-include tests *.py
