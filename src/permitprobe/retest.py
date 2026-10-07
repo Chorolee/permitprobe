@@ -50,6 +50,7 @@ def _validate_prior_report(data) -> dict:
         or not re.fullmatch(r"[0-9a-f]{64}", data["policy_digest"])
         or not isinstance(data.get("findings"), list)
         or not isinstance(data.get("evidence"), list)
+        or not isinstance(data.get("checks"), list)
         or data.get("exploration") is not None
         and not isinstance(data.get("exploration"), dict)
     ):
@@ -90,6 +91,30 @@ def _validate_prior_report(data) -> dict:
             raise ValueError
         finding_ids.append(finding_id)
     if len(set(finding_ids)) != len(finding_ids):
+        raise ValueError
+    reconstructed = Report(policy_digest=data["policy_digest"])
+    for check in data["checks"]:
+        if (
+            not isinstance(check, dict)
+            or not isinstance(check.get("code"), str)
+            or check.get("outcome") not in ("pass", "fail", "inconclusive")
+            or not isinstance(check.get("target"), str)
+            or not isinstance(check.get("detail"), str)
+            or not (
+                check.get("evidence_id") is None
+                or isinstance(check.get("evidence_id"), str)
+                and check["evidence_id"] in known_evidence
+            )
+        ):
+            raise ValueError
+        reconstructed.add(
+            check["code"],
+            check["outcome"],
+            check["target"],
+            check["detail"],
+            check.get("evidence_id"),
+        )
+    if data["findings"] != reconstructed.finding_groups():
         raise ValueError
     return data
 
