@@ -7,6 +7,7 @@ providers, MCP commands, waivers, or raw upstream reports are executed/written.
 import asyncio
 import json
 import os
+import re
 from importlib.metadata import version
 
 import httpx
@@ -16,7 +17,7 @@ from overstep.models import Effect, Observation
 from overstep.pipeline import run_pipeline
 from overstep.planner import plan
 
-from permitprobe.policy import API
+from permitprobe.policy import API, _unique
 from permitprobe.report import Report
 
 OVERSTEP_VERSION = "1.5.0"
@@ -43,19 +44,22 @@ async def fetch(url: str, headers: dict[str, str], config: API) -> tuple[int, st
 
 
 def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
+    if not resolve_tokens and any(s.cookie_env for s in config.subjects):
+        raise ValueError("cookie authentication cannot be exported as an Overstep bearer matrix")
     subjects = []
     seen_tokens = set()
     for s in config.subjects:
         token = None
-        if s.token_env:
-            token = "${" + s.token_env + "}"
+        credential_env = s.token_env or s.cookie_env
+        if credential_env:
+            token = "${" + credential_env + "}"
             if resolve_tokens:
-                token = os.environ.get(s.token_env, "")
+                token = os.environ.get(credential_env, "")
                 if (
-                    not token
+                    not token.strip()
                     or token in seen_tokens
                     or len(token) > 8192
-                    or any(ord(c) < 33 or ord(c) > 126 for c in token)
+                    or any(ord(c) < (32 if s.cookie_env else 33) or ord(c) > 126 for c in token)
                 ):
                     raise ValueError("missing, duplicated, or invalid subject credential")
                 seen_tokens.add(token)
@@ -85,10 +89,12 @@ def compile_matrix(config: API, *, resolve_tokens: bool = False) -> dict:
 
 def pointer_value(data, pointer: str):
     value = data
+    if pointer == "":
+        return value
     for key in pointer[1:].split("/"):
         key = key.replace("~1", "/").replace("~0", "~")
         if isinstance(value, list):
-            if not key.isdecimal():
+            if not re.fullmatch(r"0|[1-9][0-9]*", key):
                 raise KeyError(key)
             value = value[int(key)]
         elif isinstance(value, dict):
@@ -96,6 +102,54 @@ def pointer_value(data, pointer: str):
         else:
             raise KeyError(key)
     return value
+
+
+def check_collection(data, rule, subject, report: Report, target: str) -> None:
+    try:
+        items = pointer_value(data, rule.items_pointer)
+    except (KeyError, IndexError, TypeError, ValueError):
+        items = None
+    if not isinstance(items, list) or not items:
+        report.add(
+            "data.collection_control",
+            "inconclusive",
+            target,
+            "Expected a nonempty collection; ownership control is unverified.",
+        )
+        return
+    foreign = 0
+    unknown = 0
+    for item in items:
+        try:
+            owner = pointer_value(item, rule.owner_pointer)
+        except (KeyError, IndexError, TypeError, ValueError):
+            owner = None
+        if not isinstance(owner, str) or not owner.strip():
+            unknown += 1
+        elif owner != subject.attributes[rule.owner_attr]:
+            foreign += 1
+    # Inspect every item: a malformed sibling must not hide a proven violation.
+    if foreign:
+        report.add(
+            "data.collection_owner",
+            "fail",
+            target,
+            "Collection contains items owned by someone other than the requesting subject.",
+        )
+    if unknown:
+        report.add(
+            "data.collection_control",
+            "inconclusive",
+            target,
+            "Some collection items have no usable owner; ownership is unverified.",
+        )
+    if not foreign and not unknown:
+        report.add(
+            "data.collection_owner",
+            "pass",
+            target,
+            "Every returned collection item belongs to the requesting subject.",
+        )
 
 
 def check_api(config: API, report: Report) -> None:
@@ -151,7 +205,10 @@ def check_api(config: API, report: Report) -> None:
             target = f"{case.resource}/{case.subject}/{case.variant.value}"
             headers = {"Accept": "application/json", "Accept-Encoding": "identity"}
             if tokens[case.subject]:
-                headers["Authorization"] = "Bearer " + tokens[case.subject]
+                if subjects[case.subject].cookie_env:
+                    headers["Cookie"] = tokens[case.subject]
+                else:
+                    headers["Authorization"] = "Bearer " + tokens[case.subject]
             try:
                 status, text = asyncio.run(fetch(base_url.rstrip("/") + case.path, headers, config))
             except Exception:
@@ -201,7 +258,9 @@ def check_api(config: API, report: Report) -> None:
             # Unexpected allows are classified by Overstep below.
             try:
                 data = json.loads(
-                    text, parse_constant=lambda _: (_ for _ in ()).throw(ValueError())
+                    text,
+                    object_pairs_hook=_unique,
+                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
                 )
             except (ValueError, RecursionError):
                 report.add(
@@ -225,6 +284,8 @@ def check_api(config: API, report: Report) -> None:
             else:
                 report.add(schema_code, "pass", target, "Response matches declared schema.")
             resource = resources[case.resource]
+            if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
+                check_collection(data, resource.collection, subjects[case.subject], report, target)
             if (
                 resource.kind == "object"
                 and case.expected == Effect.ALLOW

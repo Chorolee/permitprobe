@@ -79,6 +79,34 @@
       "title": "Allow",
       "type": "object"
     },
+    "Collection": {
+      "additionalProperties": false,
+      "properties": {
+        "items_pointer": {
+          "maxLength": 512,
+          "title": "Items Pointer",
+          "type": "string"
+        },
+        "owner_pointer": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Owner Pointer",
+          "type": "string"
+        },
+        "owner_attr": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Owner Attr",
+          "type": "string"
+        }
+      },
+      "required": [
+        "items_pointer",
+        "owner_pointer",
+        "owner_attr"
+      ],
+      "title": "Collection",
+      "type": "object"
+    },
     "Handoff": {
       "additionalProperties": false,
       "properties": {
@@ -198,6 +226,17 @@
           "default": null,
           "title": "Identity Pointer"
         },
+        "collection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Collection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "allow": {
           "items": {
             "$ref": "#/$defs/Allow"
@@ -253,6 +292,19 @@
           ],
           "default": null,
           "title": "Token Env"
+        },
+        "cookie_env": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cookie Env"
         },
         "attributes": {
           "additionalProperties": {

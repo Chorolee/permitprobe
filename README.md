@@ -109,6 +109,57 @@ Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
 
+## Private collections (unreleased; source checkout)
+
+The current source adds cookie authentication and per-item collection ownership checks.
+These additions are not in the published **v0.1.1** package. Install from this checkout
+using the development instructions above to run this example. Gitleaks is not needed
+for an API-only policy or this collection demo.
+
+```sh
+permitprobe demo-collection --scenario safe     # exit 0
+permitprobe demo-collection --scenario leaky    # exit 1
+permitprobe demo-collection --scenario empty    # exit 2
+permitprobe demo-collection --scenario expired  # exit 2
+```
+
+Each member can read the same `/saved-searches` endpoint with HTTP 200, but should only
+receive their own rows. The leaky fixture returns both members' rows; even an own row
+followed by a foreign row is detected. Empty collections cannot establish a working
+ownership control: seed at least one row for each test member before checking.
+
+Copy [examples/private-collection.json](examples/private-collection.json), then adapt
+the origin, route, subject owner IDs, response schemas and these collection locations:
+
+```json
+"kind": "function",
+"collection": {
+  "items_pointer": "/items",
+  "owner_pointer": "/ownerId",
+  "owner_attr": "user_id"
+}
+```
+
+`items_pointer` selects the response array (`""` selects a root array). `owner_pointer`
+is relative to **each** item; its nonempty string must equal the requesting subject's
+`attributes.user_id`. Every returned item is inspected. The rule checks declared owner
+fields; it does not establish that rows were correctly labelled or that a list is complete.
+An empty/missing list or unusable owner is inconclusive. Proven foreign-owner findings
+are retained even alongside malformed entries; any incomplete check keeps the run at
+exit `2`, with violations still listed in the report.
+
+For cookie sessions, use `cookie_env` instead of `token_env`. The environment value is
+the complete request Cookie header, such as the synthetic `session=example; theme=light`.
+Exactly one mechanism is required per authenticated subject; anonymous has neither.
+Credentials are sent only to the configured origin. Responses cannot refresh a session
+or transfer cookies between identities. Expired sessions must be refreshed by the operator.
+Bearer authentication also works with collection rules.
+
+```sh
+# Supply the two test-session variables through your normal credential mechanism.
+permitprobe check my-private-collection.json --format json
+```
+
 ## Check and package an AI handoff
 
 ```sh
@@ -153,8 +204,10 @@ permitprobe export-overstep my-security-checks/permitprobe.json --output matrix.
 ```
 
 The output is JSON, also valid YAML for Overstep, and retains `${TOKEN_ENV}` references.
-It does **not** include PermitProbe's JSON Schema checks, strict control rules, or
-handoff checks. Direct Overstep execution has its own behavior and scope.
+It does **not** include PermitProbe's JSON Schema checks, collection ownership checks,
+strict control rules, or handoff checks. Cookie policies cannot be exported as bearer
+matrices and are refused before creating an output file. Direct Overstep execution
+has its own behavior and scope.
 
 ## Exit codes and evidence
 

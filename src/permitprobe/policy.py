@@ -28,6 +28,7 @@ class Subject(Strict):
     name: str = Field(pattern=NAME)
     role: str = Field(pattern=NAME)
     token_env: str | None = Field(default=None, pattern=ENV)
+    cookie_env: str | None = Field(default=None, pattern=ENV)
     attributes: dict[str, str] = Field(default_factory=dict)
     marker: str | None = Field(default=None, min_length=1, max_length=128)
 
@@ -37,6 +38,22 @@ class Allow(Strict):
     scope: Literal["own", "any"] = "any"
 
 
+def valid_pointer(pointer: str) -> bool:
+    return bool(re.fullmatch(r"(?:/(?:[^~/]|~[01])*)*", pointer))
+
+
+class Collection(Strict):
+    items_pointer: str = Field(max_length=512)
+    owner_pointer: str = Field(min_length=1, max_length=512)
+    owner_attr: str = Field(pattern=NAME)
+
+    @model_validator(mode="after")
+    def valid(self):
+        if not valid_pointer(self.items_pointer) or not valid_pointer(self.owner_pointer):
+            raise ValueError("collection locations must be JSON pointers")
+        return self
+
+
 class Resource(Strict):
     name: str = Field(pattern=NAME)
     path: str = Field(min_length=1, max_length=512)
@@ -44,6 +61,7 @@ class Resource(Strict):
     owner_param: str | None = Field(default=None, pattern=NAME)
     owner_attr: str | None = Field(default=None, pattern=NAME)
     identity_pointer: str | None = None
+    collection: Collection | None = None
     allow: list[Allow] = Field(min_length=1, max_length=16)
     response_schema: dict
     denial_schema: dict
@@ -62,7 +80,7 @@ class Resource(Strict):
                 raise ValueError("object resources need ownership and response identity")
             if params != [self.owner_param]:
                 raise ValueError("object path must contain exactly one owner placeholder")
-            if not self.identity_pointer.startswith("/"):
+            if not valid_pointer(self.identity_pointer):
                 raise ValueError("identity_pointer must be a JSON pointer")
         elif params or self.owner_param or self.owner_attr or self.identity_pointer:
             raise ValueError("function resources cannot declare object ownership")
@@ -70,6 +88,10 @@ class Resource(Strict):
             raise ValueError("malformed path template")
         if self.kind == "function" and any(a.scope == "own" for a in self.allow):
             raise ValueError("own scope requires an object resource")
+        if self.collection and (
+            self.kind != "function" or any(a.role == "anonymous" for a in self.allow)
+        ):
+            raise ValueError("collection rules require a protected function resource")
         try:
             for schema in (self.response_schema, self.denial_schema):
                 if not schema:
@@ -127,12 +149,12 @@ class API(Strict):
             raise ValueError("duplicate resource")
         anonymous = [s for s in self.subjects if s.role == "anonymous"]
         authenticated = [s for s in self.subjects if s.role != "anonymous"]
-        if len(anonymous) != 1 or anonymous[0].token_env:
-            raise ValueError("exactly one anonymous subject, without a token, is required")
-        if any(not s.token_env for s in authenticated):
-            raise ValueError("every authenticated subject needs token_env")
-        if len({s.token_env for s in authenticated}) != len(authenticated):
-            raise ValueError("authenticated subjects must use different token references")
+        if len(anonymous) != 1 or anonymous[0].token_env or anonymous[0].cookie_env:
+            raise ValueError("exactly one anonymous subject, without credentials, is required")
+        if any(bool(s.token_env) == bool(s.cookie_env) for s in authenticated):
+            raise ValueError("each authenticated subject needs exactly one credential reference")
+        if len({s.token_env or s.cookie_env for s in authenticated}) != len(authenticated):
+            raise ValueError("authenticated subjects must use different credential references")
         roles = {s.role for s in self.subjects}
         for r in self.resources:
             if any(a.role not in roles for a in r.allow):
@@ -141,6 +163,12 @@ class API(Strict):
                 ids = [s.attributes.get(r.owner_attr, "") for s in authenticated]
                 if any(not ID_VALUE.fullmatch(i) for i in ids) or len(set(ids)) != len(ids):
                     raise ValueError("each authenticated subject needs a distinct safe object ID")
+            if r.collection:
+                owners = [s.attributes.get(r.collection.owner_attr, "") for s in authenticated]
+                if any(not ID_VALUE.fullmatch(i) for i in owners) or len(set(owners)) != len(
+                    owners
+                ):
+                    raise ValueError("each authenticated subject needs a distinct collection owner")
         return self
 
 
