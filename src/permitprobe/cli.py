@@ -6,6 +6,7 @@ from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.api import check_api, compile_matrix
+from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
 from permitprobe.handoff import check_handoff, write_bundle
 from permitprobe.policy import Policy, PolicyError, load_policy
@@ -68,6 +69,12 @@ def parser() -> argparse.ArgumentParser:
     demo.add_argument("--gitleaks")
     demo.add_argument("--format", choices=("text", "json"), default="text")
     demo.add_argument("--report")
+    collection = commands.add_parser("demo-collection", help="Run a synthetic private collection")
+    collection.add_argument(
+        "--scenario", choices=("safe", "leaky", "empty", "expired", "server-error"), default="safe"
+    )
+    collection.add_argument("--format", choices=("text", "json"), default="text")
+    collection.add_argument("--report")
     init = commands.add_parser("init", help="Create a starter in a NEW directory")
     init.add_argument("directory", type=Path)
     export = commands.add_parser(
@@ -99,12 +106,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "demo":
             return emit(run_demo(args.scenario, args.gitleaks), args.format, args.report)
+        if args.command == "demo-collection":
+            return emit(run_collection_demo(args.scenario), args.format, args.report)
         policy = load_policy(args.policy)
         if args.command == "export-overstep":
             if not policy.api:
                 raise PolicyError("policy has no API surface")
+            matrix = compile_matrix(policy.api)
             with args.output.open("x", encoding="utf-8") as f:
-                json.dump(compile_matrix(policy.api), f, indent=2)
+                json.dump(matrix, f, indent=2)
                 f.write("\n")
             print(
                 "Auth-only matrix exported. PermitProbe data/control checks are not part of this export."
