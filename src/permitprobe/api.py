@@ -17,7 +17,7 @@ from overstep.models import Effect, Observation
 from overstep.pipeline import run_pipeline
 from overstep.planner import plan
 
-from permitprobe.policy import API, _unique
+from permitprobe.policy import API, ID_VALUE, _unique
 from permitprobe.report import Report
 from permitprobe.response_contracts import private_cache_matches, redirect_matches
 
@@ -140,7 +140,11 @@ def check_collection(data, rule, subject, report: Report, target: str) -> None:
             owner = pointer_value(item, pointer)
         except (KeyError, IndexError, TypeError, ValueError):
             owner = None
-        if not isinstance(owner, str) or not owner.strip():
+        if (
+            not isinstance(owner, str)
+            or not owner.strip()
+            or (by_items and not ID_VALUE.fullmatch(owner))
+        ):
             unknown += 1
         elif owner not in expected:
             foreign += 1

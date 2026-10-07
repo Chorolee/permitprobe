@@ -173,6 +173,8 @@ def read_server(scenario: str = "safe"):
                 ]
                 if scenario == "empty":
                     items = []
+                if scenario == "invalid-item-id":
+                    items[0]["id"] = "\0"
                 if scenario == "malformed-and-foreign":
                     items = [{}, {"id": "unlisted", "detail": "synthetic-private-detail"}]
                 body = {"items": items}

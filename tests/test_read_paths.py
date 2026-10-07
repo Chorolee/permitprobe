@@ -33,6 +33,7 @@ from permitprobe.report import Report
         ("duplicate-location", 2, "api.redirect_control"),
         ("unexpected-200", 2, "api.redirect_control"),
         ("empty", 2, "data.collection_control"),
+        ("invalid-item-id", 2, "data.collection_control"),
         ("server-error", 2, "api.unexpected_status"),
         ("malformed-and-foreign", 2, "data.collection_items"),
     ],
@@ -134,6 +135,22 @@ def test_owned_item_contract_does_not_require_every_fixture_to_appear():
     assert report.exit_code == 0
     mixed = Report()
     check_collection([{}, {"id": "foreign"}, {"id": "one"}], rule, subject, mixed, "fixture")
+    assert mixed.exit_code == 2
+    assert any(c.code == "data.collection_items" and c.outcome == "fail" for c in mixed.checks)
+
+
+@pytest.mark.parametrize("invalid_id", ["", "\0", "bad/id", "../x", "has space", "é", "x" * 129])
+def test_malformed_seeded_ids_are_inconclusive_and_preserve_foreign_siblings(invalid_id):
+    rule = Collection(items_pointer="", item_pointer="/id", items_attr="requests")
+    subject = Subject(name="alice", role="member", owned_items={"requests": ["own"]})
+    report = Report()
+    check_collection([{"id": invalid_id}], rule, subject, report, "fixture")
+    assert report.exit_code == 2
+    assert not any(c.outcome == "fail" for c in report.checks)
+    mixed = Report()
+    check_collection(
+        [{"id": invalid_id}, {"id": "foreign"}, {"id": "own"}], rule, subject, mixed, "fixture"
+    )
     assert mixed.exit_code == 2
     assert any(c.code == "data.collection_items" and c.outcome == "fail" for c in mixed.checks)
 
