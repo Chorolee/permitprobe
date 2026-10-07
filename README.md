@@ -31,9 +31,16 @@ Linux/macOS. A passing result applies only to the declared cases and scanned byt
 
 ## Try the working demo
 
-PyPI publication is being configured. Until an upload is verified, install from
-this repository or its GitHub Release files. Maintainers can follow the
-[Trusted Publishing setup](CONTRIBUTING.md#publishing-a-verified-github-release-to-pypi).
+Install the Python package from [PyPI](https://pypi.org/project/permitprobe/) (Python 3.11+):
+
+```sh
+python -m pip install permitprobe
+permitprobe --version
+```
+
+The full demos and handoff checks also require Gitleaks 8.30.1. The source-checkout
+instructions below install the pinned scanner. Release maintainers can follow the
+[Trusted Publishing guide](CONTRIBUTING.md#publishing-a-verified-github-release-to-pypi).
 
 The project was renamed from BoundaryGuard in v0.1.1 because the PyPI package
 `boundaryguard` belongs to an unrelated project. The historical v0.1.0 release

@@ -14,6 +14,10 @@ Public documentation is in English. Contributions are provided under Apache-2.0.
 
 ## Publishing a verified GitHub release to PyPI
 
+PermitProbe v0.1.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.1.1/).
+The maintainer's GitHub Trusted Publisher is configured; subsequent releases can
+use the same workflow without creating another pending publisher.
+
 The distribution, import package, and command are all named `permitprobe`. The former
 name `boundaryguard` is already used by an unrelated PyPI project. Keep historical
 GitHub tags and assets unchanged; the rename is released as v0.1.1.
