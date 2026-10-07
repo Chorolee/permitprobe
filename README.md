@@ -1,6 +1,24 @@
 # BoundaryGuard
 
-**Test who can read your API, what data it returns, and which files leave in an AI handoff.**
+[![CI](https://github.com/Chorolee/boundaryguard/actions/workflows/ci.yml/badge.svg)](https://github.com/Chorolee/boundaryguard/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/Chorolee/boundaryguard)](https://github.com/Chorolee/boundaryguard/releases)
+
+Open-source defensive security CLI for testing API authorization, response-data boundaries, and AI handoff exposure.
+
+Maintainer: @Chorolee<br>
+Security Maintainer: @Chorolee<br>
+Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
+
+License: Apache-2.0 · Current release: [v0.1.0](https://github.com/Chorolee/boundaryguard/releases/tag/v0.1.0)
+
+BoundaryGuard helps service operators validate:
+
+- cross-user authorization boundaries
+- unexpected API response fields
+- secrets included in AI handoff files
+
+It is designed exclusively for systems the operator owns or is authorized to test.
+
+BoundaryGuard was developed from recurring defensive security checks used while operating data-backed production services.
 
 BoundaryGuard is an early open-source CLI for small teams running data-backed services.
 It turns an explicit policy into repeatable checks and a local, machine-readable report.
@@ -12,6 +30,9 @@ Version **0.1.0** supports GET-only JSON REST APIs and explicit UTF-8 text-file 
 Linux/macOS. A passing result applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
+
+The PyPI package named `boundaryguard` belongs to an unrelated project. Use this
+repository or its GitHub Release files until a distinct PyPI distribution is announced.
 
 Python 3.11+ is required. From this repository:
 
