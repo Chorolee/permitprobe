@@ -165,9 +165,44 @@ Tests use real loopback HTTP and the installed Gitleaks binary. Missing Gitleaks
 suite rather than silently skipping secret-detection tests. Set `BOUNDARYGUARD_GITLEAKS`
 to an absolute binary path when it is not at `.tools/gitleaks`.
 
-Next milestones: a Supabase/pgTAP adapter with positive/negative database controls;
-linked API/storage access fixtures; explicit authorization drift baselines; and an MCP
-adapter. These are roadmap items, not current capabilities. Contributions should bring
-a safe fixture that fails before the fix and passes after it.
+## What expanding verification means
+
+This means adding **security checks that users can apply to their services**, separately
+from adding unit tests for BoundaryGuard itself. The present regression suite tests the
+tool against synthetic safe, vulnerable, and inconclusive cases; it does not audit a
+deployed application automatically.
+
+| Planned capability | Concrete question it would test |
+| --- | --- |
+| Database adapter (Supabase/pgTAP) | Can one authenticated user directly read another user's private row, even if the HTTP API denies it? |
+| Linked API/storage cases | Does a document denied by its API remain readable through a direct object URL or another declared route? |
+| Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
+| MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
+| Finding history and retests | Is a previously reproduced defect still present after a change, with valid credentials and a working positive control? |
+
+These are **not implemented in v0.1**. Each addition needs a known-vulnerable fixture,
+a fixed counterpart, and an incomplete-evidence case that must not pass.
+
+## Design reference: ARTEX
+
+[ARTEX](https://github.com/Autumn-27/ARTEX) is an AI-driven penetration-testing system.
+Reference review: [revision b55ceb1](https://github.com/Autumn-27/ARTEX/tree/b55ceb1fdd84a813d77de09a06af83d323a81f85).
+Its documented asset/exploration graphs distinguish targets from investigation progress;
+its finding retests retain prior evidence and separate reproduced, fixed, and inconclusive
+outcomes. See its [architecture](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/README.md),
+[retest model](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/db/finding_retests.go),
+and [evidence store](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/evidence/store.go).
+
+The proposed BoundaryGuard adaptation is a scoped workflow: inventory declared surfaces,
+identify a candidate, reproduce it with an executable check, retain safe evidence metadata,
+then rerun the same case after a fix. A future AI-assisted discovery layer would produce
+candidates; configured executable checks would decide the result. Any coverage view must
+keep untested surfaces visible. Response bodies and credentials would remain excluded from
+ordinary reports under this project's existing data-handling contract.
+
+ARTEX's reviewed source is [AGPL-3.0](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/LICENSE).
+It is a **conceptual reference**, not an installed dependency or an imported implementation.
+No ARTEX code, prompts, screenshots, or other assets are copied into BoundaryGuard.
+This reference review does not claim to have run or audited ARTEX.
 
 Apache-2.0. See [NOTICE](NOTICE), [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md).
