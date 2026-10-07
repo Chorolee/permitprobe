@@ -3,20 +3,28 @@ requires = ["setuptools==84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "boundaryguard"
-version = "0.1.0"
+name = "permitprobe"
+version = "0.1.1"
 description = "Repeatable API, response-data, and AI handoff boundary checks"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
+maintainers = [{name = "Chorolee"}]
+keywords = ["security", "authorization", "api-security", "security-testing"]
 dependencies = ["overstep==1.5.0", "jsonschema>=4.23,<5"]
 
+[project.urls]
+Repository = "https://github.com/Chorolee/permitprobe"
+Issues = "https://github.com/Chorolee/permitprobe/issues"
+Releases = "https://github.com/Chorolee/permitprobe/releases"
+Security = "https://github.com/Chorolee/permitprobe/security/policy"
+
 [project.optional-dependencies]
-dev = ["pytest>=8,<10", "ruff>=0.12,<1", "build>=1.2,<2"]
+dev = ["pytest>=8,<10", "ruff>=0.12,<1", "build>=1.2,<2", "twine>=6,<7"]
 
 [project.scripts]
-boundaryguard = "boundaryguard.cli:main"
+permitprobe = "permitprobe.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -1,4 +1,4 @@
-"""Overstep plans/classifies; BoundaryGuard adds strict delivery and data contracts.
+"""Overstep plans/classifies; PermitProbe adds strict delivery and data contracts.
 
 Only the compiled GET-only REST subset is accepted. No upstream fixtures, auth
 providers, MCP commands, waivers, or raw upstream reports are executed/written.
@@ -16,8 +16,8 @@ from overstep.models import Effect, Observation
 from overstep.pipeline import run_pipeline
 from overstep.planner import plan
 
-from boundaryguard.policy import API
-from boundaryguard.report import Report
+from permitprobe.policy import API
+from permitprobe.report import Report
 
 OVERSTEP_VERSION = "1.5.0"
 DENIAL_STATUSES = {401, 403, 404}

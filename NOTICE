@@ -1,7 +1,7 @@
-BoundaryGuard
-Copyright 2026 BoundaryGuard contributors
+PermitProbe
+Copyright 2026 PermitProbe contributors
 
-BoundaryGuard is independently implemented and uses third-party software:
+PermitProbe is independently implemented and uses third-party software:
 
 - Overstep 1.5.0, https://github.com/kabiri-labs/overstep (Apache-2.0)
   Copyright and notices remain with its authors. Installed as a dependency.

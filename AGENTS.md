@@ -1,4 +1,4 @@
-# BoundaryGuard
+# PermitProbe
 
 Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 

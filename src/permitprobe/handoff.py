@@ -12,11 +12,11 @@ import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 
-from boundaryguard.policy import Handoff
-from boundaryguard.report import Report
+from permitprobe.policy import Handoff
+from permitprobe.report import Report
 
 GITLEAKS_VERSION = "8.30.1"
-RECEIPT_NAME = "BOUNDARYGUARD-MANIFEST.json"
+RECEIPT_NAME = "PERMITPROBE-MANIFEST.json"
 PRIVATE_DIRS = {".git", ".ssh", ".aws", ".azure", ".kube", ".memory", ".venv"}
 PRIVATE_FILES = {".gitleaks.toml", ".gitleaksignore", "credentials", "id_rsa", "id_ed25519"}
 
@@ -138,7 +138,7 @@ def scan(snapshot: dict[str, bytes], report: Report, binary: str | None = None) 
         report.add("handoff.scanner", "inconclusive", "handoff", "Cannot verify Gitleaks 8.30.1.")
         return
     report.engines["gitleaks"] = GITLEAKS_VERSION
-    with tempfile.TemporaryDirectory(prefix="boundaryguard-scan-") as directory:
+    with tempfile.TemporaryDirectory(prefix="permitprobe-scan-") as directory:
         work = Path(directory)
         source = work / "files"
         source.mkdir()
@@ -246,7 +246,7 @@ def check_handoff(
 def write_bundle(snapshot: dict[str, bytes], destination: Path) -> None:
     manifest = {
         "schema_version": 1,
-        "scope": "Exact text bytes checked by BoundaryGuard; not an authorization to send.",
+        "scope": "Exact text bytes checked by PermitProbe; not an authorization to send.",
         "files": [
             {"path": name, "bytes": len(body), "sha256": hashlib.sha256(body).hexdigest()}
             for name, body in sorted(snapshot.items())
@@ -255,7 +255,7 @@ def write_bundle(snapshot: dict[str, bytes], destination: Path) -> None:
     }
     # Assemble privately; link into place only on completion. A partial ZIP is
     # never published at the requested path, and existing files are not replaced.
-    fd, temporary = tempfile.mkstemp(prefix=".boundaryguard-", dir=destination.parent)
+    fd, temporary = tempfile.mkstemp(prefix=".permitprobe-", dir=destination.parent)
     try:
         with os.fdopen(fd, "wb") as stream:
             with zipfile.ZipFile(stream, "w", compression=zipfile.ZIP_DEFLATED) as archive:

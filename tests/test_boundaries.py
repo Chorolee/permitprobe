@@ -10,23 +10,23 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from boundaryguard.api import check_api, compile_matrix, fetch
-from boundaryguard.cli import main
-from boundaryguard.demo import (
+from permitprobe.api import check_api, compile_matrix, fetch
+from permitprobe.cli import main
+from permitprobe.demo import (
     DEMO_TOKENS,
     demo_environment,
     example_policy,
     fixture_server,
     run_demo,
 )
-from boundaryguard.handoff import RECEIPT_NAME, check_handoff, collect, write_bundle
-from boundaryguard.policy import Handoff, Policy, PolicyError, load_policy
-from boundaryguard.report import Report
+from permitprobe.handoff import RECEIPT_NAME, check_handoff, collect, write_bundle
+from permitprobe.policy import Handoff, Policy, PolicyError, load_policy
+from permitprobe.report import Report
 
 
 @pytest.fixture
 def scanner():
-    executable = os.environ.get("BOUNDARYGUARD_GITLEAKS", ".tools/gitleaks")
+    executable = os.environ.get("PERMITPROBE_GITLEAKS", ".tools/gitleaks")
     if not Path(executable).is_file():
         pytest.fail(
             "Install Gitleaks 8.30.1 for integration tests; missing engines are not skipped."
@@ -76,9 +76,9 @@ def test_partial_positive_failure_is_not_masked_by_other_user():
 def test_invalid_credentials_send_no_requests(tokens, monkeypatch):
     with fixture_server() as (url, requests), demo_environment():
         if tokens == "missing":
-            monkeypatch.delenv("BG_ALICE_TOKEN")
+            monkeypatch.delenv("PP_ALICE_TOKEN")
         else:
-            monkeypatch.setenv("BG_BOB_TOKEN", DEMO_TOKENS["BG_ALICE_TOKEN"])
+            monkeypatch.setenv("PP_BOB_TOKEN", DEMO_TOKENS["PP_ALICE_TOKEN"])
         report = Report()
         check_api(Policy.model_validate(example_policy(url)).api, report)
         assert not requests
@@ -169,7 +169,7 @@ def test_reject_unsafe_resource_paths(path):
     [
         lambda p: p.update(unrecognized=True),
         lambda p: p["api"]["subjects"][1].update(token="DO-NOT-PRINT-ME"),
-        lambda p: p["api"]["subjects"][2].update(token_env="BG_ALICE_TOKEN"),
+        lambda p: p["api"]["subjects"][2].update(token_env="PP_ALICE_TOKEN"),
         lambda p: p["api"]["subjects"][2]["attributes"].update(document_id="alice"),
         lambda p: p["api"]["subjects"][2]["attributes"].update(document_id="//foreign-host"),
         lambda p: p["api"]["resources"][0].update(
@@ -237,7 +237,7 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
     with pytest.raises(OSError):
         write_bundle({"safe.txt": b"synthetic"}, destination)
     assert not destination.exists()
-    assert not list(tmp_path.glob(".boundaryguard-*"))
+    assert not list(tmp_path.glob(".permitprobe-*"))
 
 
 @pytest.mark.parametrize(
@@ -311,7 +311,7 @@ def test_total_budget(tmp_path):
 def test_missing_scanner_is_inconclusive(tmp_path):
     (tmp_path / "review.txt").write_text("Normal review.")
     report = Report()
-    check_handoff(handoff(), tmp_path, report, "/nonexistent/boundaryguard-gitleaks")
+    check_handoff(handoff(), tmp_path, report, "/nonexistent/permitprobe-gitleaks")
     assert report.exit_code == 2
 
 
@@ -350,7 +350,7 @@ def test_export_uses_env_references_only(tmp_path, capsys):
             main(["export-overstep", str(policy), "--output", str(tmp_path / "matrix.json")]) == 0
         )
     text = (tmp_path / "matrix.json").read_text()
-    assert "${BG_ALICE_TOKEN}" in text
+    assert "${PP_ALICE_TOKEN}" in text
     assert all(value not in text for value in DEMO_TOKENS.values())
     from overstep.matrix import load_matrix
 
@@ -363,7 +363,7 @@ def test_export_uses_env_references_only(tmp_path, capsys):
 def test_cli_initializer_does_not_overwrite(tmp_path, capsys):
     target = tmp_path / "starter"
     assert main(["init", str(target)]) == 0
-    assert load_policy(target / "boundaryguard.json")
+    assert load_policy(target / "permitprobe.json")
     (target / "review.txt").write_text("User edit")
     assert main(["init", str(target)]) == 2
     assert (target / "review.txt").read_text() == "User edit"
@@ -417,7 +417,7 @@ def test_packaged_cli_exit_codes(scenario, expected, scanner):
         [
             sys.executable,
             "-m",
-            "boundaryguard",
+            "permitprobe",
             "demo",
             "--scenario",
             scenario,
@@ -450,10 +450,8 @@ def test_empty_report_is_not_success():
 
 def test_published_example_and_schema_match_implementation():
     root = Path(__file__).resolve().parents[1]
-    assert json.loads((root / "examples/boundaryguard.json").read_text()) == example_policy()
-    assert (
-        json.loads((root / "boundaryguard.schema.json").read_text()) == Policy.model_json_schema()
-    )
+    assert json.loads((root / "examples/permitprobe.json").read_text()) == example_policy()
+    assert json.loads((root / "permitprobe.schema.json").read_text()) == Policy.model_json_schema()
 
 
 @pytest.mark.parametrize("slow_part", ["headers", "body"])

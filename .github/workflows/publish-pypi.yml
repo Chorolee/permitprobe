@@ -1,0 +1,69 @@
+name: Publish verified release to PyPI
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published GitHub release tag
+        required: true
+        default: v0.1.1
+        type: string
+      publish:
+        description: Upload to PyPI (false validates the release without uploading)
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pypi-publication
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'Chorolee/permitprobe' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.14'
+      - name: Install metadata validation tooling
+        run: python -m pip install -c requirements.lock twine
+      - name: Download and verify published distribution bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          python -c 'import os,re; assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+",os.environ["RELEASE_TAG"])'
+          gh api "repos/Chorolee/permitprobe/releases/tags/$RELEASE_TAG" > release.json
+          gh release download "$RELEASE_TAG" --repo Chorolee/permitprobe --dir dist --pattern 'permitprobe-*.whl' --pattern 'permitprobe-*.tar.gz'
+          python scripts/verify_release.py --metadata release.json --dist dist --tag "$RELEASE_TAG"
+          python -m twine check --strict dist/*
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: verified-distributions
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    if: inputs.publish
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/permitprobe/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: verified-distributions
+          path: dist/
+      - name: Publish through the registered PyPI Trusted Publisher
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: dist/
+          attestations: true

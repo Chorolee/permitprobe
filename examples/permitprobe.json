@@ -10,7 +10,7 @@
       {
         "name": "alice",
         "role": "user",
-        "token_env": "BG_ALICE_TOKEN",
+        "token_env": "PP_ALICE_TOKEN",
         "attributes": {
           "document_id": "alice"
         },
@@ -19,7 +19,7 @@
       {
         "name": "bob",
         "role": "user",
-        "token_env": "BG_BOB_TOKEN",
+        "token_env": "PP_BOB_TOKEN",
         "attributes": {
           "document_id": "bob"
         },

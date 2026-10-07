@@ -2,9 +2,9 @@
 
 Security Maintainer: @Chorolee
 
-Responsible for vulnerability triage, security fixes, private vulnerability reports, and coordinated disclosure for BoundaryGuard.
+Responsible for vulnerability triage, security fixes, private vulnerability reports, and coordinated disclosure for PermitProbe.
 
-BoundaryGuard is an early security testing tool. Version 0.1.x is the current supported
+PermitProbe is an early security testing tool. Version 0.1.x is the current supported
 line. Report suspected security defects through this repository's private vulnerability
 reporting channel (Security → Report a vulnerability). If that channel is unavailable,
 contact the maintainer on GitHub to arrange a private report before sharing sensitive details.
@@ -17,7 +17,7 @@ an external transfer. Test only systems you operate or are authorized to test.
 Sensitive handling rules:
 
 - Credentials enter through named environment variables and are not persisted in reports.
-- Response bodies and raw scanner output must never reach BoundaryGuard reports.
+- Response bodies and raw scanner output must never reach PermitProbe reports.
 - Unknown outcomes, missing tools, missing files, and failed controls must not pass.
 - No automatic remediation, production writes, deployment, or external upload.
 - Dependency updates must retain known-bad and known-good regression fixtures.

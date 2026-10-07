@@ -4,12 +4,12 @@ import argparse
 import json
 from pathlib import Path
 
-from boundaryguard import __version__
-from boundaryguard.api import check_api, compile_matrix
-from boundaryguard.demo import example_policy, run_demo
-from boundaryguard.handoff import check_handoff, write_bundle
-from boundaryguard.policy import Policy, PolicyError, load_policy
-from boundaryguard.report import Report
+from permitprobe import __version__
+from permitprobe.api import check_api, compile_matrix
+from permitprobe.demo import example_policy, run_demo
+from permitprobe.handoff import check_handoff, write_bundle
+from permitprobe.policy import Policy, PolicyError, load_policy
+from permitprobe.report import Report
 
 
 def emit(report: Report, fmt: str, output: str | None = None) -> int:
@@ -32,7 +32,7 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
     else:
         c = payload["counts"]
         print(
-            f"BoundaryGuard {payload['status'].upper()}: "
+            f"PermitProbe {payload['status'].upper()}: "
             f"{c['pass']} passed, {c['fail']} failed, {c['inconclusive']} inconclusive"
         )
         for item in report.checks:
@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "init":
             args.directory.mkdir(parents=True, exist_ok=False)
-            (args.directory / "boundaryguard.json").write_text(
+            (args.directory / "permitprobe.json").write_text(
                 json.dumps(example_policy(), indent=2) + "\n"
             )
             (args.directory / "review.txt").write_text(
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
                 json.dump(compile_matrix(policy.api), f, indent=2)
                 f.write("\n")
             print(
-                "Auth-only matrix exported. BoundaryGuard data/control checks are not part of this export."
+                "Auth-only matrix exported. PermitProbe data/control checks are not part of this export."
             )
             return 0
         report = Report()

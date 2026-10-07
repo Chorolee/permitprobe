@@ -1,6 +1,6 @@
-# BoundaryGuard
+# PermitProbe
 
-[![CI](https://github.com/Chorolee/boundaryguard/actions/workflows/ci.yml/badge.svg)](https://github.com/Chorolee/boundaryguard/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/Chorolee/boundaryguard)](https://github.com/Chorolee/boundaryguard/releases)
+[![CI](https://github.com/Chorolee/permitprobe/actions/workflows/ci.yml/badge.svg)](https://github.com/Chorolee/permitprobe/actions/workflows/ci.yml) [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE) [![Release](https://img.shields.io/github/v/release/Chorolee/permitprobe)](https://github.com/Chorolee/permitprobe/releases)
 
 Open-source defensive security CLI for testing API authorization, response-data boundaries, and AI handoff exposure.
 
@@ -8,9 +8,9 @@ Maintainer: @Chorolee<br>
 Security Maintainer: @Chorolee<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
-License: Apache-2.0 · Current release: [v0.1.0](https://github.com/Chorolee/boundaryguard/releases/tag/v0.1.0)
+License: Apache-2.0 · Current release: [v0.1.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.1.1)
 
-BoundaryGuard helps service operators validate:
+PermitProbe helps service operators validate:
 
 - cross-user authorization boundaries
 - unexpected API response fields
@@ -18,21 +18,26 @@ BoundaryGuard helps service operators validate:
 
 It is designed exclusively for systems the operator owns or is authorized to test.
 
-BoundaryGuard was developed from recurring defensive security checks used while operating data-backed production services.
+PermitProbe was developed from recurring defensive security checks used while operating data-backed production services.
 
-BoundaryGuard is an early open-source CLI for small teams running data-backed services.
+PermitProbe is an early open-source CLI for small teams running data-backed services.
 It turns an explicit policy into repeatable checks and a local, machine-readable report.
 It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization planning and
 classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
 contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
 
-Version **0.1.0** supports GET-only JSON REST APIs and explicit UTF-8 text-file handoffs on
+Version **0.1.1** supports GET-only JSON REST APIs and explicit UTF-8 text-file handoffs on
 Linux/macOS. A passing result applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
 
-The PyPI package named `boundaryguard` belongs to an unrelated project. Use this
-repository or its GitHub Release files until a distinct PyPI distribution is announced.
+PyPI publication is being configured. Until an upload is verified, install from
+this repository or its GitHub Release files. Maintainers can follow the
+[Trusted Publishing setup](CONTRIBUTING.md#publishing-a-verified-github-release-to-pypi).
+
+The project was renamed from BoundaryGuard in v0.1.1 because the PyPI package
+`boundaryguard` belongs to an unrelated project. The historical v0.1.0 release
+remains unchanged.
 
 Python 3.11+ is required. From this repository:
 
@@ -42,9 +47,9 @@ python3 -m venv .venv
 python -m pip install -c requirements.lock -e '.[dev]'
 python scripts/install_gitleaks.py
 
-boundaryguard demo --scenario safe --gitleaks .tools/gitleaks
-boundaryguard demo --scenario leaky --gitleaks .tools/gitleaks
-boundaryguard demo --scenario expired --gitleaks .tools/gitleaks
+permitprobe demo --scenario safe --gitleaks .tools/gitleaks
+permitprobe demo --scenario leaky --gitleaks .tools/gitleaks
+permitprobe demo --scenario expired --gitleaks .tools/gitleaks
 ```
 
 The demos start an ephemeral server on literal loopback and use synthetic credentials
@@ -59,20 +64,20 @@ and documents. They do not contact an application or a database.
 | `server-error` | `2` | A server error on a negative test is not evidence that authorization worked |
 
 Exit `1` and `2` in the last examples are intentional. No response bodies, token values,
-file contents, or raw scanner diagnostics are included in BoundaryGuard reports.
+file contents, or raw scanner diagnostics are included in PermitProbe reports.
 
 ## Check your own staging API
 
 ```sh
-boundaryguard init my-security-checks
+permitprobe init my-security-checks
 ```
 
-Edit `my-security-checks/boundaryguard.json`:
+Edit `my-security-checks/permitprobe.json`:
 
 - Set the HTTPS origin of a target you operate. HTTP is accepted only for literal loopback.
 - Name one anonymous identity and at least two authenticated identities with distinct objects.
 - Point `token_env` at environment variables containing the corresponding bearer tokens.
-  BoundaryGuard does not read dotenv files, create users, or obtain credentials.
+  PermitProbe does not read dotenv files, create users, or obtain credentials.
 - Declare each resource's allowed roles and `own`/`any` scope.
 - For object resources, name the URL parameter, identity attribute, and JSON pointer that
   proves a successful response actually returned the intended object.
@@ -85,7 +90,7 @@ Edit `my-security-checks/boundaryguard.json`:
 After supplying the token variables through your normal local credential mechanism:
 
 ```sh
-boundaryguard check my-security-checks/boundaryguard.json \
+permitprobe check my-security-checks/permitprobe.json \
   --gitleaks .tools/gitleaks --report result.json
 ```
 
@@ -93,14 +98,14 @@ The starter origin is a non-working `example.invalid` placeholder. A missing tok
 unreachable target, unsupported response, failed control, or missing scanner exits `2`.
 Reports and exports are created exclusively; existing files are not overwritten.
 
-Use `boundaryguard schema` to print the policy's JSON Schema. Unknown policy keys,
+Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
-`examples/boundaryguard.json` is a complete configuration with synthetic placeholders.
+`examples/permitprobe.json` is a complete configuration with synthetic placeholders.
 
 ## Check and package an AI handoff
 
 ```sh
-boundaryguard bundle my-security-checks/boundaryguard.json \
+permitprobe bundle my-security-checks/permitprobe.json \
   --gitleaks .tools/gitleaks --output reviewed-handoff.zip
 ```
 
@@ -121,14 +126,14 @@ the scan. Gitleaks runs with a small explicit environment, without inherited cre
 or configuration overrides. It receives neutral filenames and private temporary files.
 These controls are a preflight check, not a sandbox for a malicious scanner executable.
 
-## What is reused, and what BoundaryGuard adds
+## What is reused, and what PermitProbe adds
 
 | Component | Responsibility |
 | --- | --- |
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| BoundaryGuard | Strict configuration, bounded GET transport, per-identity positive controls, object identity checks, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
+| PermitProbe | Strict configuration, bounded GET transport, per-identity positive controls, object identity checks, success **and denial** response contracts, explicit file boundaries, checked-byte bundles, and one privacy-conscious report |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -137,11 +142,11 @@ No code from a source-available-only security product is embedded here.
 An auth-only matrix can be exported for direct use with Overstep:
 
 ```sh
-boundaryguard export-overstep my-security-checks/boundaryguard.json --output matrix.json
+permitprobe export-overstep my-security-checks/permitprobe.json --output matrix.json
 ```
 
 The output is JSON, also valid YAML for Overstep, and retains `${TOKEN_ENV}` references.
-It does **not** include BoundaryGuard's JSON Schema checks, strict control rules, or
+It does **not** include PermitProbe's JSON Schema checks, strict control rules, or
 handoff checks. Direct Overstep execution has its own behavior and scope.
 
 ## Exit codes and evidence
@@ -183,13 +188,13 @@ python -m build
 ```
 
 Tests use real loopback HTTP and the installed Gitleaks binary. Missing Gitleaks fails the
-suite rather than silently skipping secret-detection tests. Set `BOUNDARYGUARD_GITLEAKS`
+suite rather than silently skipping secret-detection tests. Set `PERMITPROBE_GITLEAKS`
 to an absolute binary path when it is not at `.tools/gitleaks`.
 
 ## What expanding verification means
 
 This means adding **security checks that users can apply to their services**, separately
-from adding unit tests for BoundaryGuard itself. The present regression suite tests the
+from adding unit tests for PermitProbe itself. The present regression suite tests the
 tool against synthetic safe, vulnerable, and inconclusive cases; it does not audit a
 deployed application automatically.
 
@@ -214,7 +219,7 @@ outcomes. See its [architecture](https://github.com/Autumn-27/ARTEX/blob/b55ceb1
 [retest model](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/db/finding_retests.go),
 and [evidence store](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/evidence/store.go).
 
-The proposed BoundaryGuard adaptation is a scoped workflow: inventory declared surfaces,
+The proposed PermitProbe adaptation is a scoped workflow: inventory declared surfaces,
 identify a candidate, reproduce it with an executable check, retain safe evidence metadata,
 then rerun the same case after a fix. A future AI-assisted discovery layer would produce
 candidates; configured executable checks would decide the result. Any coverage view must
@@ -223,7 +228,7 @@ ordinary reports under this project's existing data-handling contract.
 
 ARTEX's reviewed source is [AGPL-3.0](https://github.com/Autumn-27/ARTEX/blob/b55ceb1fdd84a813d77de09a06af83d323a81f85/LICENSE).
 It is a **conceptual reference**, not an installed dependency or an imported implementation.
-No ARTEX code, prompts, screenshots, or other assets are copied into BoundaryGuard.
+No ARTEX code, prompts, screenshots, or other assets are copied into PermitProbe.
 This reference review does not claim to have run or audited ARTEX.
 
 Apache-2.0. See [NOTICE](NOTICE), [CONTRIBUTING.md](CONTRIBUTING.md), and [SECURITY.md](SECURITY.md).

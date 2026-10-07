@@ -9,12 +9,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from boundaryguard.api import check_api
-from boundaryguard.handoff import check_handoff
-from boundaryguard.policy import Policy
-from boundaryguard.report import Report
+from permitprobe.api import check_api
+from permitprobe.handoff import check_handoff
+from permitprobe.policy import Policy
+from permitprobe.report import Report
 
-DEMO_TOKENS = {"BG_ALICE_TOKEN": "demo-only-alice-token", "BG_BOB_TOKEN": "demo-only-bob-token"}
+DEMO_TOKENS = {"PP_ALICE_TOKEN": "demo-only-alice-token", "PP_BOB_TOKEN": "demo-only-bob-token"}
 
 
 def example_policy(base_url: str = "https://staging.example.invalid") -> dict:
@@ -27,14 +27,14 @@ def example_policy(base_url: str = "https://staging.example.invalid") -> dict:
                 {
                     "name": "alice",
                     "role": "user",
-                    "token_env": "BG_ALICE_TOKEN",
+                    "token_env": "PP_ALICE_TOKEN",
                     "attributes": {"document_id": "alice"},
                     "marker": "alice",
                 },
                 {
                     "name": "bob",
                     "role": "user",
-                    "token_env": "BG_BOB_TOKEN",
+                    "token_env": "PP_BOB_TOKEN",
                     "attributes": {"document_id": "bob"},
                     "marker": "bob",
                 },
