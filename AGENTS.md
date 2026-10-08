@@ -15,6 +15,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - The library reuses Overstep and Gitleaks; do not silently widen their execution scope.
 - Keep live API credentials in PermitProbe's delivery layer; planning and classification engines
   receive environment-reference placeholders rather than bearer-token or cookie values.
+- Parse request Cookie credentials as unambiguous name/value pairs and compare normalized pair sets
+  across subjects; reordering or quoting must not bypass the distinct-credential preflight.
 - Never forward a policy-referenced subject credential or request-header environment variable to
   an exploration provider, even when it is also named explicitly with `--provider-env`.
 - All fixtures are synthetic. Tests use loopback; never point tests at production.

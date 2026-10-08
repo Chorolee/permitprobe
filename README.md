@@ -405,6 +405,8 @@ exit `2`, with violations still listed in the report.
 For cookie sessions, use `cookie_env` instead of `token_env`. The environment value is
 the complete request Cookie header, such as the synthetic `session=example; theme=light`.
 Exactly one mechanism is required per authenticated subject; anonymous has neither.
+Cookie headers must contain unambiguous name/value pairs with no repeated names. PermitProbe
+rejects the same cookie pair set across subjects even when order, spacing, or value quoting differs.
 Use separate test accounts: different credential strings alone do not prove different
 authenticated identities, especially when Cookie headers differ only in preferences.
 Credentials are sent only to the configured origin. Responses cannot refresh a session
