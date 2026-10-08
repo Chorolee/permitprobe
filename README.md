@@ -14,6 +14,7 @@ PermitProbe helps service operators validate:
 
 - cross-user authorization boundaries
 - unexpected API response fields
+- public-route response, cache, and fail-fast boundaries
 - secrets included in AI handoff files
 
 It is designed exclusively for systems the operator owns or is authorized to test.
@@ -108,6 +109,53 @@ Reports and exports are created exclusively; existing files are not overwritten.
 Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
+
+## Public and retired route contracts (unreleased; source checkout)
+
+[examples/public-contracts.json](examples/public-contracts.json) checks anonymous GET
+routes without requiring test accounts. This supports public-only Cloudflare or edge
+services as well as mixed policies that also contain the authorization resources above.
+
+Each `public_resources` entry declares:
+
+- an origin-relative `path` and ordered `query` name/value pairs;
+- `active` or `retired` lifecycle metadata;
+- one or more expected final HTTP statuses;
+- an absolute `max_elapsed_ms` fail-fast limit;
+- an optional inline JSON response schema and strict `no-store` cache contract; and
+- named request variants whose header values come from environment references.
+
+```json
+{
+  "name": "retired-account-page",
+  "path": "/account",
+  "lifecycle": "retired",
+  "variants": [
+    {"name": "default"},
+    {
+      "name": "session-shaped",
+      "header_envs": {"Cookie": "PP_SYNTHETIC_ATTACKER_COOKIE"}
+    }
+  ],
+  "expected_statuses": [307, 404, 410, 503],
+  "max_elapsed_ms": 500
+}
+```
+
+Query values are encoded by the core and cannot be embedded in `path`. Ordered entries
+preserve deliberate duplicate-name cases. The allowed variant headers are `Cookie`,
+`Origin`, `Referer`, `User-Agent`, `X-Forwarded-For`, and `X-Real-IP`; their values must
+be supplied through named environment variables and never appear in reports. PermitProbe
+still sends only GET requests, follows no redirects, ignores proxy environment variables,
+and creates a fresh HTTP client for every case.
+
+An unexpected status, schema mismatch, cache mismatch, or completed response over the
+declared limit exits `1`. A transport failure with no latency conclusion exits `2`.
+The latency limit covers connection setup, response headers, and the complete bounded body,
+and cannot be greater than the API-level `timeout_seconds` value.
+Reports retain the measured milliseconds but omit URLs, query values, header values, and
+response bodies. A public finding can be passed to `permitprobe retest`; the retest adds a
+header-free variant for the same resource when one is declared.
 
 ## Private collections (unreleased; source checkout)
 
@@ -276,6 +324,9 @@ and from the baseline, and become selectable capabilities only in `explore`. A m
 emit non-executable capability-gap proposals. A proposal must be converted into a strict policy
 entry before any later run can send it.
 
+`public_resources` run deterministically through `check` and public-finding `retest`; they are
+not exposed to an exploration provider as selectable capabilities.
+
 The required state path is created privately and checkpointed atomically after the baseline and
 every round. Its graph distinguishes subjects, resources, planned cases, hypotheses, intents,
 observations, capability proposals and findings. Broken provider output, a timeout, repeated or
@@ -293,7 +344,8 @@ permitprobe retest my-security-checks/permitprobe.json \
   --output retest.json
 ```
 
-The retest executes the finding's cases plus authenticated and anonymous controls. It records
+The retest executes the finding's cases plus authenticated and anonymous controls. Public
+contract findings also add a header-free same-route control when available. It records
 `reproduced`, `not_reproduced` or `inconclusive`. `fixed` requires the same successful controls
 and an explicit safe revision/deployment label such as `--change-ref deploy:abc123`; absence on
 one run alone is not called a fix. A prior report is rejected unless its checks reproduce its
@@ -331,7 +383,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, bounded GET transport, full owner-pair coverage, per-identity positive controls, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
+| PermitProbe | Strict configuration, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -345,7 +397,7 @@ permitprobe export-overstep my-security-checks/permitprobe.json --output matrix.
 
 The output is JSON, also valid YAML for Overstep, and retains `${TOKEN_ENV}` references.
 It does **not** include PermitProbe's JSON Schema checks, collection ownership checks,
-private-cache checks, strict control rules, or handoff checks. Cookie and redirect
+public-route contracts, private-cache checks, strict control rules, or handoff checks. Cookie and redirect
 policies cannot be exported and are refused before creating an output file. Direct Overstep execution
 has its own behavior and scope.
 
@@ -359,8 +411,9 @@ has its own behavior and scope.
 
 `--format json` prints the versioned report. `--report path.json` additionally creates
 a local report file. Schema version 2 includes normalized evidence IDs, owner aliases,
-coverage and grouped findings; it still omits credential values, response bodies, redirect
-destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
+coverage and grouped findings. Public-contract evidence also records elapsed milliseconds.
+Reports still omit credential and request-header values, response bodies, query values,
+redirect destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. Declared redirect responses are checked from their headers only.
@@ -375,7 +428,8 @@ cookie jars are not used. Declared redirect responses are checked from their hea
 - JSON Schemas are inline Draft 2020-12; reference resolution and format enforcement are
   not supported. Denial responses must also be valid JSON matching their declared schema.
 - These are API observations, **not** a proof of database grants, RLS, storage, GraphQL,
-  caching, or write-path correctness. The tool never connects to a database in v0.1.
+  intermediary cache behavior, or write-path correctness. Cache checks cover response headers
+  only. The tool never connects to a database in v0.1.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
   archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
 - Policy files, schemas, installed dependencies, scanner and exploration-provider executables
