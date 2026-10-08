@@ -105,6 +105,14 @@ def test_response_budget():
     assert any(c.code == "api.delivery" for c in report.checks)
 
 
+@pytest.mark.parametrize("value", [9, 30_001])
+def test_validation_budget_is_bounded(value):
+    data = example_policy()
+    data["api"]["validation_timeout_ms"] = value
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
 def test_closed_server_does_not_pass():
     with fixture_server() as (url, _):
         data = example_policy(url)

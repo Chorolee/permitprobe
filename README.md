@@ -9,7 +9,7 @@ Security Maintainer: Susan (@Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
 License: Apache-2.0<br>
-Current release: [v0.2.0](https://github.com/Chorolee/permitprobe/releases/tag/v0.2.0)
+Current release: [v0.2.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.2.1)
 
 PermitProbe helps service operators validate:
 
@@ -31,10 +31,10 @@ It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization 
 classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
 contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
 
-Version **0.2.0** supports GET-only JSON REST APIs, one-shot declared website assessments and
+Version **0.2.1** supports GET-only JSON REST APIs, one-shot declared website assessments and
 explicit UTF-8 text-file handoffs on Linux/macOS. It includes the public-route, inventory,
 baseline, exploration, retest and proposal-discovery capabilities documented below. See the
-[changelog](CHANGELOG.md) and [v0.2.0 release notes](docs/releases/v0.2.0.md). A passing result
+[changelog](CHANGELOG.md) and [v0.2.1 release notes](docs/releases/v0.2.1.md). A passing result
 applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
@@ -42,7 +42,7 @@ applies only to the declared cases and scanned bytes.
 Install the Python package from [PyPI](https://pypi.org/project/permitprobe/) (Python 3.11+):
 
 ```sh
-python -m pip install 'permitprobe==0.2.0'
+python -m pip install 'permitprobe==0.2.1'
 permitprobe --version
 ```
 
@@ -159,6 +159,8 @@ website assessment.
     "seed_paths": ["/", "/account"],
     "include_robots": true,
     "include_sitemap": true,
+    "report_path_literals": ["admin", "login"],
+    "report_query_names": ["page"],
     "max_candidates": 128,
     "max_response_bytes": 262144,
     "timeout_seconds": 5
@@ -169,8 +171,10 @@ website assessment.
 The only added requests are anonymous GETs to those exact seed paths plus `/robots.txt` and
 `/sitemap.xml` when enabled. PermitProbe parses navigation links, form actions, concrete robots
 paths and sitemap locations in memory. It accepts proposals only from the exact configured
-origin, omits query values, replaces identifier-shaped path segments with `{value}`, and records
-the source element or directive without retaining source text.
+origin and always omits query values. Response-derived path segments and query names remain
+visible only when the same literal is already declared by policy or explicitly listed in
+`report_path_literals` or `report_query_names`; every other value is replaced. The report records
+the source element or directive and merged-variant count without retaining source text.
 
 A same-origin GET proposal with no matching `resources` or `public_resources` path exits `1` as
 `discovery.undeclared`. A source delivery, parse or truncation problem exits `2`. POST form
@@ -179,6 +183,8 @@ pages, redirect destinations, nested sitemaps and robots entries are never fetch
 states `discovered_requests_executed: 0` and counts the fixed source requests separately from
 the declared live checks. The ordinary `check` command ignores `api.discovery`; this contract is
 used only by the one-shot `scan` workflow.
+Discovery failures cannot be placed in a known-finding baseline because multiple private raw
+locations can intentionally collapse into the same report-safe path shape.
 
 ## Inventory an OpenAPI surface
 
@@ -263,8 +269,8 @@ header-free variant for the same resource when one is declared.
 
 ## Private collections
 
-Version 0.2.0 supports cookie authentication and per-item collection ownership checks. Gitleaks
-is not needed for an API-only policy or this collection demo.
+PermitProbe supports cookie authentication and per-item collection ownership checks. Gitleaks is
+not needed for an API-only policy or this collection demo.
 
 ```sh
 permitprobe demo-collection --scenario safe     # exit 0
@@ -396,7 +402,7 @@ delivery and prevents an unexpectedly large full matrix from sending any request
 
 ## Active AI exploration
 
-Version 0.2.0 includes a bounded active explorer. The AI observes normalized results, forms
+PermitProbe includes a bounded active explorer. The AI observes normalized results, forms
 hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains control of
 credentials, HTTP delivery, expected policy, classification, budgets, coverage and completion.
 The provider cannot create a URL, header, token, request body, shell command or tool call.
@@ -472,9 +478,11 @@ permitprobe check my-security-checks/permitprobe.json \
   --baseline permitprobe-baseline.json --report current.json
 ```
 
-When every failure matches the same policy digest plus exact check code and target, the report
-status is `known_findings` and the command exits `0`. The failed checks remain visible. A new
-target or check exits `1`; any incomplete evidence still exits `2`.
+When every eligible failure matches the same target-bound policy digest plus exact check code and
+target, the report status is `known_findings` and the command exits `0`. The digest includes the
+normalized target scheme, host and port, so a baseline cannot move between environments. The
+failed checks remain visible. A new target or check exits `1`; any incomplete evidence still
+exits `2`. Availability, handoff and discovery findings are never baseline-eligible.
 
 Baseline files are strict, bounded JSON. Each entry has a derived ID, `first_seen`, `last_seen`,
 and optional `expires`. The expiry date remains active through that date and resurfaces on the
@@ -555,8 +563,8 @@ a local report file. Schema version 2 includes normalized evidence IDs, owner al
 coverage and grouped findings. Public-contract evidence also records elapsed milliseconds.
 Reports still omit credential and request-header values, response bodies, query values,
 raw discovered URLs, redirect destinations and observed collection IDs. Discovery reports retain
-only normalized path shapes, safe query names and fixed source labels. Unconfigured surfaces are
-named explicitly. An empty run cannot pass.
+only normalized path shapes, policy-approved query names, counts and fixed source labels.
+Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Applied baseline summaries list known, new, unobserved and expired entry IDs without removing
 the underlying failure checks.
 One-shot reports additionally name each configured or skipped stage and record request counts,
@@ -564,7 +572,15 @@ GET-only scope, optional proposal discovery, disabled automatic expansion, disab
 following and zero writes.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
-cookie jars are not used. Declared redirect responses are checked from their headers only.
+cookie jars are not used. `api.validation_timeout_ms` additionally caps the cumulative local
+JSON parsing, schema and ownership-validation work in each execution batch. Declared redirect
+responses are checked from their headers only.
+
+The validation interrupt uses POSIX `SIGALRM`. The CLI runs validation on the main thread with no
+pre-existing `ITIMER_REAL`. A library embedding that validates from another thread or already owns
+that timer fails closed with `data.validation_budget` instead of running validation without a
+deadline. During active exploration, validation is also clipped to the remaining `--max-seconds`
+total deadline.
 
 ## Scope and limitations
 
@@ -616,7 +632,7 @@ deployed application automatically.
 | Sanitized proposal replay | Which reviewed route proposal should become a declared, reproducible check without retaining raw requests? |
 
 These are **not implemented in v0.2**. Finding history, bounded active exploration and
-declared exploration capabilities are included in v0.2.0 as described above.
+declared exploration capabilities are included in the current release as described above.
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 

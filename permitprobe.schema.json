@@ -66,6 +66,13 @@
           "title": "Timeout Seconds",
           "type": "integer"
         },
+        "validation_timeout_ms": {
+          "default": 5000,
+          "maximum": 30000,
+          "minimum": 10,
+          "title": "Validation Timeout Ms",
+          "type": "integer"
+        },
         "max_response_bytes": {
           "default": 1000000,
           "maximum": 5000000,
@@ -201,6 +208,22 @@
           "default": true,
           "title": "Include Sitemap",
           "type": "boolean"
+        },
+        "report_path_literals": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Report Path Literals",
+          "type": "array"
+        },
+        "report_query_names": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Report Query Names",
+          "type": "array"
         },
         "max_candidates": {
           "default": 128,

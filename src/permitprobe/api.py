@@ -23,6 +23,11 @@ from overstep.planner import plan
 from permitprobe.policy import API, ID_VALUE, _unique, api_contract_digest
 from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import private_cache_matches, redirect_matches
+from permitprobe.validation import (
+    ValidationBudgetExceeded,
+    ValidationLimiter,
+    schema_errors,
+)
 
 OVERSTEP_VERSION = "1.5.0"
 DENIAL_STATUSES = {401, 403, 404}
@@ -144,22 +149,19 @@ def pointer_value(data, pointer: str):
     return value
 
 
-def check_collection(
-    data, rule, subject, report: Report, target: str, evidence_id: str | None = None
-) -> None:
+def collection_results(data, rule, subject) -> list[tuple[str, str, str]]:
     try:
         items = pointer_value(data, rule.items_pointer)
     except (KeyError, IndexError, TypeError, ValueError):
         items = None
     if not isinstance(items, list) or not items:
-        report.add(
-            "data.collection_control",
-            "inconclusive",
-            target,
-            "Expected a nonempty collection; ownership control is unverified.",
-            evidence_id,
-        )
-        return
+        return [
+            (
+                "data.collection_control",
+                "inconclusive",
+                "Expected a nonempty collection; ownership control is unverified.",
+            )
+        ]
     foreign = 0
     unknown = 0
     by_items = rule.items_attr is not None
@@ -182,35 +184,44 @@ def check_collection(
             unknown += 1
         elif owner not in expected:
             foreign += 1
+    results = []
     # Inspect every item: a malformed sibling must not hide a proven violation.
     if foreign:
-        report.add(
-            "data.collection_items" if by_items else "data.collection_owner",
-            "fail",
-            target,
-            "Collection contains IDs outside the subject's declared item set."
-            if by_items
-            else "Collection contains items owned by someone other than the requesting subject.",
-            evidence_id,
+        results.append(
+            (
+                "data.collection_items" if by_items else "data.collection_owner",
+                "fail",
+                "Collection contains IDs outside the subject's declared item set."
+                if by_items
+                else "Collection contains items owned by someone other than the requesting subject.",
+            )
         )
     if unknown:
-        report.add(
-            "data.collection_control",
-            "inconclusive",
-            target,
-            "Some collection items have no usable identity; ownership is unverified.",
-            evidence_id,
+        results.append(
+            (
+                "data.collection_control",
+                "inconclusive",
+                "Some collection items have no usable identity; ownership is unverified.",
+            )
         )
     if not foreign and not unknown:
-        report.add(
-            "data.collection_items" if by_items else "data.collection_owner",
-            "pass",
-            target,
-            "Every returned item ID is in the subject's declared item set."
-            if by_items
-            else "Every returned collection item belongs to the requesting subject.",
-            evidence_id,
+        results.append(
+            (
+                "data.collection_items" if by_items else "data.collection_owner",
+                "pass",
+                "Every returned item ID is in the subject's declared item set."
+                if by_items
+                else "Every returned collection item belongs to the requesting subject.",
+            )
         )
+    return results
+
+
+def check_collection(
+    data, rule, subject, report: Report, target: str, evidence_id: str | None = None
+) -> None:
+    for code, outcome, detail in collection_results(data, rule, subject):
+        report.add(code, outcome, target, detail, evidence_id)
 
 
 def case_target(case: TestCase) -> str:
@@ -331,8 +342,13 @@ def execute_api_cases(
     report: Report,
     *,
     deadline: float | None = None,
+    validation_limiter: ValidationLimiter | None = None,
     clock: Callable[[], float] = monotonic,
 ) -> list[Observation]:
+    if validation_limiter is None:
+        validation_limiter = ValidationLimiter(
+            prepared.config.validation_timeout_ms / 1_000
+        )
     tokens = {subject.name: subject.token for subject in prepared.matrix.subjects}
     observations = []
     for case in planned:
@@ -494,12 +510,46 @@ def execute_api_cases(
                 case.id,
             )
             continue
+        resource_collection_results = []
+        valid_identity = None
         try:
-            data = json.loads(
-                text,
-                object_pairs_hook=_unique,
-                parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+            with validation_limiter.run(
+                max_seconds=None if deadline is None else deadline - clock()
+            ):
+                data = json.loads(
+                    text,
+                    object_pairs_hook=_unique,
+                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+                )
+                validator = (
+                    prepared.validators if effect == Effect.ALLOW else prepared.denial_validators
+                )[case.resource]
+                errors = schema_errors(validator, data)
+                if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
+                    resource_collection_results = collection_results(
+                        data,
+                        resource.collection,
+                        prepared.subjects[case.subject],
+                    )
+                if (
+                    resource.kind == "object"
+                    and case.expected == Effect.ALLOW
+                    and effect == Effect.ALLOW
+                ):
+                    try:
+                        actual = pointer_value(data, resource.identity_pointer)
+                        valid_identity = actual == owner.attributes[resource.owner_attr]
+                    except (KeyError, IndexError, TypeError, ValueError):
+                        valid_identity = False
+        except ValidationBudgetExceeded:
+            report.add(
+                "data.validation_budget",
+                "inconclusive",
+                target,
+                "Response parsing or contract validation exceeded the total validation budget.",
+                case.id,
             )
+            continue
         except (ValueError, RecursionError):
             report.add(
                 "data.json",
@@ -509,10 +559,6 @@ def execute_api_cases(
                 case.id,
             )
             continue
-        validator = (
-            prepared.validators if effect == Effect.ALLOW else prepared.denial_validators
-        )[case.resource]
-        errors = list(validator.iter_errors(data))
         schema_code = "data.schema" if effect == Effect.ALLOW else "data.denial_schema"
         if errors:
             keywords = ", ".join(sorted({str(error.validator) for error in errors}))
@@ -527,25 +573,9 @@ def execute_api_cases(
             report.add(
                 schema_code, "pass", target, "Response matches declared schema.", case.id
             )
-        if resource.collection and case.expected == Effect.ALLOW and effect == Effect.ALLOW:
-            check_collection(
-                data,
-                resource.collection,
-                prepared.subjects[case.subject],
-                report,
-                target,
-                case.id,
-            )
-        if (
-            resource.kind == "object"
-            and case.expected == Effect.ALLOW
-            and effect == Effect.ALLOW
-        ):
-            try:
-                actual = pointer_value(data, resource.identity_pointer)
-                valid_identity = actual == owner.attributes[resource.owner_attr]
-            except (KeyError, IndexError, TypeError, ValueError):
-                valid_identity = False
+        for code, outcome, detail in resource_collection_results:
+            report.add(code, outcome, target, detail, case.id)
+        if valid_identity is not None:
             report.add(
                 "api.object_control",
                 "pass" if valid_identity else "inconclusive",
@@ -623,8 +653,19 @@ def check_api(config: API, report: Report) -> None:
             "The combined authorization and public contract plan exceeds max_cases.",
         )
         return
+    validation_limiter = ValidationLimiter(config.validation_timeout_ms / 1_000)
     if prepared:
-        observations = execute_api_cases(prepared, prepared.cases, report)
+        observations = execute_api_cases(
+            prepared,
+            prepared.cases,
+            report,
+            validation_limiter=validation_limiter,
+        )
         finalize_api(prepared, prepared.cases, observations, report)
     if public:
-        execute_public_cases(public, public.cases, report)
+        execute_public_cases(
+            public,
+            public.cases,
+            report,
+            validation_limiter=validation_limiter,
+        )

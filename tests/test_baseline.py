@@ -13,7 +13,7 @@ from permitprobe.baseline import (
 )
 from permitprobe.cli import main
 from permitprobe.demo import demo_environment, example_policy, fixture_server
-from permitprobe.policy import PolicyError
+from permitprobe.policy import Policy, PolicyError, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import load_prior_report
 
@@ -70,7 +70,10 @@ def test_inconclusive_evidence_always_wins_over_a_known_failure():
     assert current.to_dict()["status"] == "inconclusive"
 
 
-@pytest.mark.parametrize("code", ["availability.latency", "handoff.secret"])
+@pytest.mark.parametrize(
+    "code",
+    ["availability.latency", "discovery.undeclared", "handoff.secret"],
+)
 def test_variable_latency_and_handoff_failures_cannot_be_baselined(code):
     report = report_with((code, "fail", "synthetic/target"))
     with pytest.raises(PolicyError, match="non-baselineable"):
@@ -123,6 +126,23 @@ def test_policy_mismatch_is_inconclusive():
     assert current.exit_code == 2
     assert current.baseline["policy_match"] is False
     assert any(check.code == "baseline.policy" for check in current.checks)
+
+
+def test_baseline_cannot_move_between_target_origins():
+    first = Policy.model_validate(example_policy("https://one.example.invalid")).api
+    second = Policy.model_validate(example_policy("https://two.example.invalid")).api
+    original = report_with(
+        ("api.BOLA", "fail", "documents/alice/other/bob"),
+        digest=api_contract_digest(first),
+    )
+    baseline = baseline_for(original)
+    current = report_with(
+        ("api.BOLA", "fail", "documents/alice/other/bob"),
+        digest=api_contract_digest(second),
+    )
+    apply_baseline(current, baseline, today=TODAY)
+    assert current.exit_code == 2
+    assert current.baseline["policy_match"] is False
 
 
 def test_update_preserves_annotations_and_carries_unobserved_entries():

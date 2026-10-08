@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from permitprobe.api import case_descriptor, execute_api_cases, finalize_api, prepare_api
 from permitprobe.policy import API, ENV
 from permitprobe.report import Report
+from permitprobe.validation import ValidationLimiter
 
 MAX_PROVIDER_BYTES = 1_000_000
 SAFE_TEXT = re.compile(r"^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$")
@@ -557,8 +558,14 @@ def explore_api(
         report.exploration = trace
         _checkpoint(report, trace, origin, checkpoint, "complete")
         return
+    validation_limiter = ValidationLimiter(config.validation_timeout_ms / 1_000)
     observations: list[Observation] = execute_api_cases(
-        prepared, seed, report, deadline=deadline, clock=clock
+        prepared,
+        seed,
+        report,
+        deadline=deadline,
+        validation_limiter=validation_limiter,
+        clock=clock,
     )
     executed = [by_id[item.test_id] for item in observations]
     origin.update({case.id: "baseline" for case in executed})
@@ -702,7 +709,12 @@ def explore_api(
             break
         selected = [by_id[item.case_id] for item in accepted]
         new_observations = execute_api_cases(
-            prepared, selected, report, deadline=deadline, clock=clock
+            prepared,
+            selected,
+            report,
+            deadline=deadline,
+            validation_limiter=validation_limiter,
+            clock=clock,
         )
         observations.extend(new_observations)
         executed_ids = {item.test_id for item in new_observations}
@@ -740,7 +752,12 @@ def explore_api(
             if case.id in remaining_ids
         ][: request_budget - len(executed)]
         tail_observations = execute_api_cases(
-            prepared, tail, report, deadline=deadline, clock=clock
+            prepared,
+            tail,
+            report,
+            deadline=deadline,
+            validation_limiter=validation_limiter,
+            clock=clock,
         )
         observations.extend(tail_observations)
         tail_ids = {item.test_id for item in tail_observations}

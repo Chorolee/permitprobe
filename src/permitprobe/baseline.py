@@ -17,7 +17,7 @@ MAX_BASELINE_BYTES = 5_000_000
 MAX_ENTRIES = 4_096
 CODE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,127}$")
 DATE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
-INELIGIBLE_PREFIXES = ("availability.", "handoff.")
+INELIGIBLE_PREFIXES = ("availability.", "discovery.", "handoff.")
 
 FailureKey = tuple[str, str]
 

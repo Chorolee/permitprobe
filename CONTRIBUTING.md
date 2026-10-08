@@ -36,7 +36,7 @@ PERMITPROBE_GITLEAKS=.tools/gitleaks python -m pytest -q
 python -m build
 python -m twine check --strict dist/*
 python scripts/smoke_wheel.py \
-  --wheel dist/permitprobe-0.2.0-py3-none-any.whl \
+  --wheel dist/permitprobe-0.2.1-py3-none-any.whl \
   --constraint requirements.lock \
   --gitleaks .tools/gitleaks
 ```
@@ -51,7 +51,7 @@ Do not rebuild between GitHub publication and registry publication.
 
 ## Publishing a verified GitHub release to PyPI
 
-PermitProbe v0.2.0 is [published on PyPI](https://pypi.org/project/permitprobe/0.2.0/).
+PermitProbe v0.2.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.2.1/).
 The maintainer's GitHub Trusted Publisher is configured; subsequent releases can
 use the same workflow without creating another pending publisher.
 
@@ -77,9 +77,9 @@ A pending publisher does not reserve a name or publish a package.
 
 Before publication, run **Publish verified release to PyPI** on `main` with the
 release tag and `publish=false`. This downloads the existing GitHub wheel and source
-distribution, verifies their GitHub SHA256 digests, checks package name/version,
-then runs strict metadata validation and the installed-wheel smoke test. It does not rebuild
-or upload the package.
+distribution, verifies their GitHub SHA256 digests, checks package name/version, proves that the
+wheel package code and sdist build metadata match the checked-out release tag, then runs strict
+metadata validation and the installed-wheel smoke test. It does not rebuild or upload the package.
 After account setup and a successful validation, run the same workflow with
 `publish=true`. Only the upload job receives the short-lived OIDC publishing permission.
 

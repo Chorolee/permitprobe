@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+import permitprobe.api as api_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
 from permitprobe.policy import Policy
@@ -57,24 +58,39 @@ def public_policy(base_url="https://staging.example.invalid"):
 
 @contextmanager
 def public_server(scenario="safe"):
-    requests = []
+    class ScenarioRequests(list):
+        active_scenario = scenario
+
+    requests = ScenarioRequests()
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
             pass
 
         def do_GET(self):
+            active_scenario = requests.active_scenario
             headers = dict(self.headers)
             requests.append((self.path, headers))
-            if scenario == "slow-cookie" and headers.get("Cookie"):
+            if active_scenario == "slow-cookie" and headers.get("Cookie"):
                 time.sleep(0.35)
-            status = 503 if scenario == "bad-status" else 410 if scenario == "retired" else 200
-            body = {"state": "wrong"} if scenario == "bad-schema" else {"state": "ready"}
+            status = (
+                503
+                if active_scenario == "bad-status"
+                else 410
+                if active_scenario == "retired"
+                else 200
+            )
+            body = (
+                {"state": "wrong"}
+                if active_scenario == "bad-schema"
+                else {"state": "ready"}
+            )
             raw = json.dumps(body).encode()
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header(
-                "Cache-Control", "public, max-age=60" if scenario == "cacheable" else "no-store"
+                "Cache-Control",
+                "public, max-age=60" if active_scenario == "cacheable" else "no-store",
             )
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
@@ -130,33 +146,66 @@ def test_public_contract_fails_closed_on_status_schema_and_cache(scenario, code,
     assert any(check.code == code and check.outcome == "fail" for check in report.checks)
 
 
+@pytest.mark.parametrize(
+    "schema,body",
+    [
+        ({"type": "string", "pattern": "^(a+)+$"}, "a" * 34 + "!"),
+        (
+            {"type": "array", "uniqueItems": True},
+            [{"item": index} for index in range(10_000)],
+        ),
+    ],
+)
+def test_response_validation_is_stopped_by_total_budget(schema, body, monkeypatch):
+    data = public_policy()
+    resource = data["api"]["public_resources"][0]
+    resource["variants"] = [{"name": "default"}]
+    resource["response_schema"] = schema
+    config = Policy.model_validate(data).api
+    # Exercise the production deadline without making the test wait for the
+    # integer-valued public policy minimum.
+    config.validation_timeout_ms = 50
+
+    async def immediate_response(*_args, **_kwargs):
+        return 200, json.dumps(body), {"Cache-Control": "no-store"}
+
+    monkeypatch.setattr(api_module, "fetch", immediate_response)
+    started = time.monotonic()
+    report = Report()
+    check_api(config, report)
+    assert time.monotonic() - started < 1
+    assert report.exit_code == 2
+    assert any(check.code == "data.validation_budget" for check in report.checks)
+    assert report.evidence[next(iter(report.evidence))].observed == "unknown"
+
+
 def test_public_latency_finding_retests_with_header_free_control(monkeypatch):
     monkeypatch.setenv("PP_ATTACKER_COOKIE", ATTACKER_COOKIE)
     with public_server("slow-cookie") as (url, requests):
         original = Report()
         check_api(Policy.model_validate(public_policy(url)).api, original)
-    assert len(requests) == 2
-    prior = original.to_dict()
-    finding = next(
-        item for item in prior["findings"] if item["code"] == "availability.latency"
-    )
-    assert len(finding["evidence_ids"]) == 1
-
-    with public_server("safe") as (url, requests):
+        assert len(requests) == 2
+        prior = original.to_dict()
+        finding = next(
+            item for item in prior["findings"] if item["code"] == "availability.latency"
+        )
+        assert len(finding["evidence_ids"]) == 1
+        requests.active_scenario = "safe"
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(public_policy(url)).api,
             prior,
             finding["finding_id"],
             change_ref="deploy:fail-fast-123",
         )
-    assert verdict == "fixed", result
-    assert len(requests) == 2
-    assert result["report"]["coverage"] == {
-        "planned": 2,
-        "observed": 2,
-        "unprobed": [],
-    }
-    assert ATTACKER_COOKIE not in json.dumps(result)
+        assert verdict == "fixed", result
+        assert len(requests) == 2
+        assert result["report"]["coverage"] == {
+            "planned": 2,
+            "observed": 2,
+            "unprobed": [],
+        }
+        assert ATTACKER_COOKIE not in json.dumps(result)
 
 
 def test_missing_variant_environment_value_sends_no_request(monkeypatch):

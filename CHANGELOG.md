@@ -3,6 +3,38 @@
 All notable changes to PermitProbe are recorded here. The project uses semantic versioning
 while it is in the `0.x` development series.
 
+## [0.2.1] - 2026-10-08
+
+### Security
+
+- Discovery now retains response-derived path segments and query names only when the same literal
+  is already declared by policy or explicitly allowlisted for reporting. Every other observed
+  value is replaced deterministically, including short tokens and person-like names.
+- Response JSON parsing, JSON Schema evaluation and collection/identity validation now share an
+  absolute local wall-clock budget. Exhaustion is reported as `data.validation_budget` and exits
+  `2`; schema error collection is also bounded.
+- Policy digests now include the normalized target scheme, host and port. Baselines, finding IDs,
+  exploration state and retests therefore fail closed when moved to another origin.
+- PyPI verification checks out the exact release tag and proves that package code in the wheel and
+  sdist plus sdist build metadata match that tag before publication.
+
+### Changed
+
+- `api.validation_timeout_ms` configures the total response-validation budget for one execution
+  batch and defaults to 5000 ms. Active exploration shares it across batches and enforces its
+  remaining total deadline during validation.
+- `api.discovery.report_path_literals` and `report_query_names` explicitly authorize otherwise
+  redacted response-derived labels in reports.
+- Discovery findings cannot enter a known-finding baseline because privacy-preserving path shapes
+  can intentionally merge multiple observed locations.
+
+### Compatibility
+
+- Baselines and prior reports created by v0.2.0 do not match v0.2.1 target-bound policy digests.
+  Re-run the intended target and create a newly reviewed baseline instead of editing an old file.
+- Report schema version remains 2 and the policy format remains version 1. New policy fields are
+  optional and have bounded defaults.
+
 ## [0.2.0] - 2026-10-08
 
 ### Added
@@ -51,6 +83,7 @@ while it is in the `0.x` development series.
 
 - Initial authorization, response-schema and selected handoff boundary checks.
 
+[0.2.1]: https://github.com/Chorolee/permitprobe/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Chorolee/permitprobe/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Chorolee/permitprobe/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Chorolee/permitprobe/releases/tag/v0.1.0

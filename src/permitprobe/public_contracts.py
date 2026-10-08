@@ -16,6 +16,11 @@ from jsonschema import Draft202012Validator
 from permitprobe.policy import API, PublicResource, RequestVariant, _unique, api_contract_digest
 from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import no_store_matches
+from permitprobe.validation import (
+    ValidationBudgetExceeded,
+    ValidationLimiter,
+    schema_errors,
+)
 
 
 @dataclass(frozen=True)
@@ -115,11 +120,16 @@ def execute_public_cases(
     selected: list[PublicCase],
     report: Report,
     *,
+    validation_limiter: ValidationLimiter | None = None,
     clock: Callable[[], float] = monotonic,
 ) -> None:
     # Imported here to keep the transport in one place without a module cycle.
     from permitprobe.api import fetch
 
+    if validation_limiter is None:
+        validation_limiter = ValidationLimiter(
+            prepared.config.validation_timeout_ms / 1_000
+        )
     for case in selected:
         resource = case.resource
         target = f"{resource.name}/{case.variant.name}"
@@ -219,10 +229,21 @@ def execute_public_cases(
 
         if status_ok and resource.response_schema is not None:
             try:
-                data = json.loads(
-                    text,
-                    object_pairs_hook=_unique,
-                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+                with validation_limiter.run():
+                    data = json.loads(
+                        text,
+                        object_pairs_hook=_unique,
+                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+                    )
+                    errors = schema_errors(prepared.validators[resource.name], data)
+            except ValidationBudgetExceeded:
+                outcomes.append("inconclusive")
+                report.add(
+                    "data.validation_budget",
+                    "inconclusive",
+                    target,
+                    "Response parsing or contract validation exceeded the total validation budget.",
+                    case.id,
                 )
             except (ValueError, RecursionError):
                 outcomes.append("fail")
@@ -234,7 +255,6 @@ def execute_public_cases(
                     case.id,
                 )
             else:
-                errors = list(prepared.validators[resource.name].iter_errors(data))
                 outcomes.append("fail" if errors else "pass")
                 keywords = ", ".join(sorted({str(error.validator) for error in errors}))
                 report.add(
@@ -268,7 +288,11 @@ def execute_public_cases(
                 None,
                 case.variant.name,
                 "match",
-                "mismatch" if "fail" in outcomes else "match",
+                "unknown"
+                if "inconclusive" in outcomes
+                else "mismatch"
+                if "fail" in outcomes
+                else "match",
                 status,
                 "complete",
                 elapsed,

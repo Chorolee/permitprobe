@@ -294,6 +294,10 @@ class Discovery(Strict):
     seed_paths: list[str] = Field(default_factory=lambda: ["/"], min_length=1, max_length=4)
     include_robots: bool = True
     include_sitemap: bool = True
+    # Only policy-approved response-derived labels may survive in reports.
+    # All other path segments and query names are replaced with placeholders.
+    report_path_literals: list[str] = Field(default_factory=list, max_length=128)
+    report_query_names: list[str] = Field(default_factory=list, max_length=64)
     max_candidates: int = Field(default=128, ge=1, le=512)
     max_response_bytes: int = Field(default=262_144, ge=1_024, le=1_000_000)
     timeout_seconds: int = Field(default=5, ge=1, le=15)
@@ -305,6 +309,16 @@ class Discovery(Strict):
         for path in self.seed_paths:
             if len(path) > 512 or path_params(path):
                 raise ValueError("discovery seeds must be concrete origin-relative paths")
+        if (
+            len(set(self.report_path_literals)) != len(self.report_path_literals)
+            or any(not ID_VALUE.fullmatch(item) for item in self.report_path_literals)
+        ):
+            raise ValueError("discovery report path literals must be safe and distinct")
+        if (
+            len(set(self.report_query_names)) != len(self.report_query_names)
+            or any(not QUERY_NAME.fullmatch(item) for item in self.report_query_names)
+        ):
+            raise ValueError("discovery report query names must be safe and distinct")
         return self
 
 
@@ -325,6 +339,9 @@ class API(Strict):
     # miss a conditional authorization bug that affects only one owner pair.
     probe_victims: Literal["one", "all"] = "all"
     timeout_seconds: int = Field(default=5, ge=1, le=30)
+    # Total wall-clock budget for response parsing and contract validation in
+    # one deterministic API/public execution batch.
+    validation_timeout_ms: int = Field(default=5_000, ge=10, le=30_000)
     max_response_bytes: int = Field(default=1_000_000, ge=64, le=5_000_000)
     max_cases: int = Field(default=256, ge=1, le=1024)
 
@@ -393,7 +410,17 @@ def api_contract_digest(
     config: API, *, include_exploration: bool = False, include_public: bool = True
 ) -> str:
     contract = config.model_dump(mode="json")
-    for operational in ("base_url", "timeout_seconds", "max_response_bytes", "max_cases"):
+    # Bind evidence to the exact normalized origin without retaining the URL in
+    # reports. Moving a baseline or retest to another environment must change
+    # the digest and therefore fail closed.
+    contract["target_origin"] = list(origin_key(config.base_url))
+    for operational in (
+        "base_url",
+        "timeout_seconds",
+        "validation_timeout_ms",
+        "max_response_bytes",
+        "max_cases",
+    ):
         contract.pop(operational, None)
     if not include_exploration:
         contract.pop("exploration_resources", None)
