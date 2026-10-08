@@ -22,6 +22,11 @@ while it is in the `0.x` development series.
 
 - The synthetic read-path demo emits redirects only for its declared canonical fixture paths;
   request path input can no longer flow into a response `Location` header.
+- CI now enforces Ruff's security rules on production code, keeps checkout credentials out of
+  Git configuration, validates release tags before checkout, bounds job duration and shortens the
+  lifetime of verified publication artifacts.
+- Dependabot waits seven days before proposing ordinary new releases while security updates remain
+  immediate, reducing exposure to newly published supply-chain compromises.
 
 ## [0.3.0] - 2026-10-09
 
