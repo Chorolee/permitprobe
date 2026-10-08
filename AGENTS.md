@@ -51,3 +51,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   GET-only boundary, and fail duplicate, malformed, reflected, or under-protected responses closed.
 - Parse COOP and COEP as single structured-field items, keep CORP case-sensitive, and require the
   exact true structured boolean for origin agent clustering.
+- Parse the complete bounded Permissions-Policy structured dictionary and require an exact empty
+  allowlist for every feature declared disabled; never retain observed policy values.

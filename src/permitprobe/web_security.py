@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import re
 from urllib.parse import urlsplit
 
@@ -10,6 +12,7 @@ import httpx
 from permitprobe.policy import (
     CORSContract,
     HSTSContract,
+    PermissionsPolicyContract,
     ResponseCookieContract,
     ResponseSecurityContract,
     SecurityHeadersContract,
@@ -25,6 +28,13 @@ _SF_STRING = r'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\["\\])*"'
 _STRUCTURED_POLICY = re.compile(
     rf"(?P<token>{_SF_WORD})(?:; *report-to={_SF_STRING})?"
 )
+_SF_KEY = re.compile(r"[a-z*][a-z0-9_.*-]{0,63}")
+_SF_TOKEN = re.compile(_SF_WORD)
+_SF_NUMBER = re.compile(r"-?(?:[0-9]{1,12}\.[0-9]{1,3}|[0-9]{1,15})")
+_SF_BINARY = re.compile(r":[A-Za-z0-9+/]*={0,2}:")
+_MAX_PERMISSIONS_POLICY_BYTES = 8_192
+_MAX_PERMISSIONS_POLICY_MEMBERS = 128
+_MAX_PERMISSIONS_POLICY_ITEMS = 64
 
 
 def _values(headers: httpx.Headers, name: str) -> list[str]:
@@ -94,6 +104,141 @@ def _structured_policy_matches(value: str | None, accepted: list[str]) -> bool:
     return match is not None and match.group("token") in accepted
 
 
+class _PermissionsPolicyParser:
+    """Fail-closed parser for the Permissions-Policy structured dictionary subset."""
+
+    def __init__(self, value: str):
+        self.value = value
+        self.position = 0
+
+    def parse(self) -> dict[str, bool] | None:
+        if (
+            not self.value
+            or len(self.value) > _MAX_PERMISSIONS_POLICY_BYTES
+            or any(ord(char) < 32 or ord(char) > 126 for char in self.value)
+        ):
+            return None
+        members: dict[str, bool] = {}
+        self._spaces()
+        while self.position < len(self.value):
+            if len(members) >= _MAX_PERMISSIONS_POLICY_MEMBERS:
+                return None
+            key = self._match(_SF_KEY)
+            if key is None or key in members:
+                return None
+            disabled = self._member_value() if self._take("=") else False
+            if disabled is None or not self._parameters():
+                return None
+            members[key] = disabled
+            self._spaces()
+            if self.position == len(self.value):
+                return members
+            if not self._take(","):
+                return None
+            self._spaces()
+            if self.position == len(self.value):
+                return None
+        return None
+
+    def _member_value(self) -> bool | None:
+        if self._take("("):
+            self._spaces()
+            item_count = 0
+            while not self._take(")"):
+                if (
+                    item_count >= _MAX_PERMISSIONS_POLICY_ITEMS
+                    or self._bare_item() is None
+                    or not self._parameters()
+                ):
+                    return None
+                item_count += 1
+                if self.position >= len(self.value):
+                    return None
+                if self.value[self.position] == ")":
+                    continue
+                if not self._spaces():
+                    return None
+            return item_count == 0
+        if self._bare_item() is None:
+            return None
+        return False
+
+    def _bare_item(self) -> str | None:
+        if self.position >= len(self.value):
+            return None
+        if self.value[self.position] == '"':
+            return "string" if self._string() else None
+        if self.value[self.position] == ":":
+            encoded = self._match(_SF_BINARY)
+            if encoded is None:
+                return None
+            try:
+                base64.b64decode(encoded[1:-1], validate=True)
+            except (binascii.Error, ValueError):
+                return None
+            return "binary"
+        if self.value.startswith(("?0", "?1"), self.position):
+            self.position += 2
+            return "boolean"
+        if self.value[self.position].isdigit() or self.value[self.position] == "-":
+            return "number" if self._match(_SF_NUMBER) is not None else None
+        return "token" if self._match(_SF_TOKEN) is not None else None
+
+    def _string(self) -> bool:
+        self.position += 1
+        while self.position < len(self.value):
+            char = self.value[self.position]
+            self.position += 1
+            if char == '"':
+                return True
+            if char == "\\":
+                if self.position >= len(self.value) or self.value[self.position] not in ('"', "\\"):
+                    return False
+                self.position += 1
+            elif ord(char) < 0x20 or ord(char) > 0x7E:
+                return False
+        return False
+
+    def _parameters(self) -> bool:
+        while self._take(";"):
+            self._spaces()
+            if self._match(_SF_KEY) is None:
+                return False
+            if self._take("=") and self._bare_item() is None:
+                return False
+        return True
+
+    def _spaces(self) -> bool:
+        start = self.position
+        while self.position < len(self.value) and self.value[self.position] == " ":
+            self.position += 1
+        return self.position > start
+
+    def _take(self, expected: str) -> bool:
+        if self.value.startswith(expected, self.position):
+            self.position += len(expected)
+            return True
+        return False
+
+    def _match(self, pattern: re.Pattern[str]) -> str | None:
+        match = pattern.match(self.value, self.position)
+        if match is None:
+            return None
+        self.position = match.end()
+        return match.group()
+
+
+def _permissions_policy_matches(
+    value: str | None, contract: PermissionsPolicyContract
+) -> bool:
+    if value is None:
+        return False
+    members = _PermissionsPolicyParser(value).parse()
+    return members is not None and all(
+        members.get(feature) is True for feature in contract.disabled_features
+    )
+
+
 def security_header_results(
     contract: SecurityHeadersContract, headers: httpx.Headers
 ) -> list[tuple[str, str, str]]:
@@ -142,6 +287,16 @@ def security_header_results(
                     contract.content_security_policy.required_directives,
                 ),
                 "content-security-policy",
+            )
+        )
+    if contract.permissions_policy is not None:
+        results.append(
+            _result(
+                "web.permissions_policy",
+                _permissions_policy_matches(
+                    _one(headers, "Permissions-Policy"), contract.permissions_policy
+                ),
+                "permissions-policy",
             )
         )
     for field, header, code, noun in (
