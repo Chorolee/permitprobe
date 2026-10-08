@@ -511,7 +511,12 @@ def explore_api(
     request_budget = config.max_cases if max_requests_total is None else max_requests_total
     if not 1 <= request_budget <= config.max_cases:
         raise ValueError("invalid request budget")
-    prepared = prepare_api(config, report, include_exploration=True)
+    prepared = prepare_api(
+        config,
+        report,
+        include_exploration=True,
+        include_public=False,
+    )
     if prepared is None:
         trace = {
             "protocol_version": 1,

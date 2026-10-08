@@ -29,6 +29,7 @@ class Evidence:
     observed: str
     status: int
     delivery: Literal["complete", "failed", "skipped"]
+    elapsed_ms: int | None = None
 
 
 @dataclass

@@ -68,3 +68,12 @@ def private_cache_matches(headers: httpx.Headers, auth_header: str) -> bool:
     if any(not re.fullmatch(r"[!#$%&'*+.^_`|~0-9a-z-]+", s) for s in vary):
         return False
     return "private" in directives and (auth_header.lower() in vary or "*" in vary)
+
+
+def no_store_matches(headers: httpx.Headers) -> bool:
+    # Reuse the same strict directive subset while requiring no-store itself.
+    names = {
+        part.strip().split("=", 1)[0]
+        for part in headers.get("cache-control", "").lower().split(",")
+    }
+    return "no-store" in names and private_cache_matches(headers, "")

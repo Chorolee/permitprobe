@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://staging.example.invalid",
+    "timeout_seconds": 5,
+    "public_resources": [
+      {
+        "name": "case-survey",
+        "path": "/api/cases/survey",
+        "lifecycle": "active",
+        "query": [
+          {
+            "name": "case",
+            "value": "synthetic-case"
+          },
+          {
+            "name": "court",
+            "value": "synthetic-court"
+          },
+          {
+            "name": "mode",
+            "value": "current"
+          }
+        ],
+        "variants": [
+          {
+            "name": "default"
+          },
+          {
+            "name": "session-shaped",
+            "header_envs": {
+              "Cookie": "PP_SYNTHETIC_ATTACKER_COOKIE"
+            }
+          }
+        ],
+        "expected_statuses": [
+          200
+        ],
+        "max_elapsed_ms": 1000,
+        "cache": "no-store",
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "properties": {
+            "state": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      {
+        "name": "retired-account-page",
+        "path": "/account",
+        "lifecycle": "retired",
+        "expected_statuses": [
+          307,
+          404,
+          410,
+          503
+        ],
+        "max_elapsed_ms": 500
+      }
+    ]
+  }
+}

@@ -12,7 +12,6 @@
             "$ref": "#/$defs/Subject"
           },
           "maxItems": 16,
-          "minItems": 3,
           "title": "Subjects",
           "type": "array"
         },
@@ -21,8 +20,15 @@
             "$ref": "#/$defs/Resource"
           },
           "maxItems": 32,
-          "minItems": 1,
           "title": "Resources",
+          "type": "array"
+        },
+        "public_resources": {
+          "items": {
+            "$ref": "#/$defs/PublicResource"
+          },
+          "maxItems": 32,
+          "title": "Public Resources",
           "type": "array"
         },
         "exploration_resources": {
@@ -65,9 +71,7 @@
         }
       },
       "required": [
-        "base_url",
-        "subjects",
-        "resources"
+        "base_url"
       ],
       "title": "API",
       "type": "object"
@@ -222,6 +226,118 @@
       "title": "Handoff",
       "type": "object"
     },
+    "PublicResource": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "lifecycle": {
+          "default": "active",
+          "enum": [
+            "active",
+            "retired"
+          ],
+          "title": "Lifecycle",
+          "type": "string"
+        },
+        "query": {
+          "items": {
+            "$ref": "#/$defs/QueryParameter"
+          },
+          "maxItems": 32,
+          "title": "Query",
+          "type": "array"
+        },
+        "variants": {
+          "items": {
+            "$ref": "#/$defs/RequestVariant"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Variants",
+          "type": "array"
+        },
+        "expected_statuses": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "title": "Expected Statuses",
+          "type": "array"
+        },
+        "max_elapsed_ms": {
+          "default": 5000,
+          "maximum": 30000,
+          "minimum": 1,
+          "title": "Max Elapsed Ms",
+          "type": "integer"
+        },
+        "cache": {
+          "anyOf": [
+            {
+              "const": "no-store",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cache"
+        },
+        "response_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Response Schema"
+        }
+      },
+      "required": [
+        "name",
+        "path"
+      ],
+      "title": "PublicResource",
+      "type": "object"
+    },
+    "QueryParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 512,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "QueryParameter",
+      "type": "object"
+    },
     "Redirect": {
       "additionalProperties": false,
       "properties": {
@@ -263,6 +379,29 @@
         "required_query"
       ],
       "title": "Redirect",
+      "type": "object"
+    },
+    "RequestVariant": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "header_envs": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "maxProperties": 8,
+          "title": "Header Envs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RequestVariant",
       "type": "object"
     },
     "Resource": {

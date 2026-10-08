@@ -2,7 +2,7 @@ import httpx
 import pytest
 
 from permitprobe.policy import Redirect
-from permitprobe.response_contracts import private_cache_matches, redirect_matches
+from permitprobe.response_contracts import no_store_matches, private_cache_matches, redirect_matches
 
 
 @pytest.mark.parametrize(
@@ -39,6 +39,21 @@ def test_bearer_cache_is_bound_to_authorization_header():
     headers = httpx.Headers({"Cache-Control": "private", "Vary": "Authorization"})
     assert private_cache_matches(headers, "Authorization")
     assert not private_cache_matches(headers, "Cookie")
+
+
+@pytest.mark.parametrize(
+    "cache,expected",
+    [
+        ("no-store", True),
+        ("private, no-store, max-age=0", True),
+        ("private", False),
+        ("public, no-store", False),
+        ("no-store=1", False),
+        ("no-store, unknown", False),
+    ],
+)
+def test_public_no_store_contract(cache, expected):
+    assert no_store_matches(httpx.Headers({"Cache-Control": cache})) is expected
 
 
 @pytest.mark.parametrize(

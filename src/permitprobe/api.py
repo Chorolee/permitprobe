@@ -5,7 +5,6 @@ providers, MCP commands, waivers, or raw upstream reports are executed/written.
 """
 
 import asyncio
-import hashlib
 import json
 import os
 import re
@@ -21,7 +20,7 @@ from overstep.matrix import Matrix
 from overstep.models import Effect, Observation, RunResult, TestCase
 from overstep.planner import plan
 
-from permitprobe.policy import API, ID_VALUE, _unique
+from permitprobe.policy import API, ID_VALUE, _unique, api_contract_digest
 from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import private_cache_matches, redirect_matches
 
@@ -66,6 +65,8 @@ async def fetch(
 def compile_matrix(
     config: API, *, resolve_tokens: bool = False, include_exploration: bool = False
 ) -> dict:
+    if not config.resources:
+        raise ValueError("an authorization matrix requires an ordinary resource")
     if not resolve_tokens and (
         any(s.cookie_env for s in config.subjects)
         or any(
@@ -244,9 +245,15 @@ class PreparedAPI:
 
 
 def prepare_api(
-    config: API, report: Report, *, include_exploration: bool = False
+    config: API,
+    report: Report,
+    *,
+    include_exploration: bool = False,
+    include_public: bool = True,
 ) -> PreparedAPI | None:
-    report.configured.extend(["api", "data"])
+    for surface in ("api", "data"):
+        if surface not in report.configured:
+            report.configured.append(surface)
     report.engines["overstep"] = version("overstep")
     if report.engines["overstep"] != OVERSTEP_VERSION:
         report.add("api.engine_version", "inconclusive", "api", "Untested Overstep version.")
@@ -307,14 +314,11 @@ def prepare_api(
         resource.name: Draft202012Validator(resource.denial_schema)
         for resource in selected_resources
     }
-    contract = config.model_dump(mode="json")
-    for operational in ("base_url", "timeout_seconds", "max_response_bytes", "max_cases"):
-        contract.pop(operational, None)
-    if not include_exploration:
-        contract.pop("exploration_resources", None)
-    report.policy_digest = hashlib.sha256(
-        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    report.policy_digest = api_contract_digest(
+        config,
+        include_exploration=include_exploration,
+        include_public=include_public,
+    )
     report.plan([case_descriptor(case) for case in cases])
     return PreparedAPI(
         config, matrix, cases, resources, subjects, validators, denial_validators
@@ -602,8 +606,25 @@ def finalize_api(
 
 
 def check_api(config: API, report: Report) -> None:
-    prepared = prepare_api(config, report)
-    if prepared is None:
+    from permitprobe.public_contracts import execute_public_cases, prepare_public
+
+    prepared = prepare_api(config, report) if config.resources else None
+    if config.resources and prepared is None:
         return
-    observations = execute_api_cases(prepared, prepared.cases, report)
-    finalize_api(prepared, prepared.cases, observations, report)
+    public = prepare_public(config, report) if config.public_resources else None
+    if config.public_resources and public is None:
+        return
+    planned = (len(prepared.cases) if prepared else 0) + (len(public.cases) if public else 0)
+    if planned > config.max_cases:
+        report.add(
+            "api.coverage",
+            "inconclusive",
+            "api",
+            "The combined authorization and public contract plan exceeds max_cases.",
+        )
+        return
+    if prepared:
+        observations = execute_api_cases(prepared, prepared.cases, report)
+        finalize_api(prepared, prepared.cases, observations, report)
+    if public:
+        execute_public_cases(public, public.cases, report)

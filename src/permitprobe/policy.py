@@ -1,5 +1,6 @@
 """Small, strict JSON contract. Credentials are environment references, never literals."""
 
+import hashlib
 import ipaddress
 import json
 import re
@@ -13,6 +14,15 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_valida
 NAME = r"^[A-Za-z][A-Za-z0-9_-]{0,63}$"
 ENV = r"^[A-Z][A-Z0-9_]{0,127}$"
 ID_VALUE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.~-]{0,127}$")
+QUERY_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_.~-]{0,63}$")
+PUBLIC_HEADER_NAMES = {
+    "cookie",
+    "origin",
+    "referer",
+    "user-agent",
+    "x-forwarded-for",
+    "x-real-ip",
+}
 MAX_POLICY_BYTES = 1_000_000
 
 
@@ -135,6 +145,80 @@ class Redirect(Strict):
         return self
 
 
+class QueryParameter(Strict):
+    name: str = Field(min_length=1, max_length=64)
+    value: str = Field(max_length=512)
+
+    @model_validator(mode="after")
+    def valid(self):
+        if not QUERY_NAME.fullmatch(self.name) or any(
+            ord(char) < 32 or ord(char) == 127 for char in self.value
+        ):
+            raise ValueError("query parameters require a safe name and value")
+        return self
+
+
+class RequestVariant(Strict):
+    name: str = Field(pattern=NAME)
+    header_envs: dict[str, str] = Field(default_factory=dict, max_length=8)
+
+    @model_validator(mode="after")
+    def valid(self):
+        lowered = [name.lower() for name in self.header_envs]
+        if (
+            len(lowered) != len(set(lowered))
+            or any(name not in PUBLIC_HEADER_NAMES for name in lowered)
+            or any(not re.fullmatch(ENV, env) for env in self.header_envs.values())
+        ):
+            raise ValueError("request variant headers must be allowlisted environment references")
+        return self
+
+
+class PublicResource(Strict):
+    name: str = Field(pattern=NAME)
+    path: str = Field(min_length=1, max_length=512)
+    lifecycle: Literal["active", "retired"] = "active"
+    query: list[QueryParameter] = Field(default_factory=list, max_length=32)
+    variants: list[RequestVariant] = Field(
+        default_factory=lambda: [RequestVariant(name="default")],
+        min_length=1,
+        max_length=8,
+    )
+    expected_statuses: list[int] = Field(default_factory=lambda: [200], min_length=1, max_length=16)
+    max_elapsed_ms: int = Field(default=5_000, ge=1, le=30_000)
+    cache: Literal["no-store"] | None = None
+    response_schema: dict | None = None
+
+    @model_validator(mode="after")
+    def valid(self):
+        if path_params(self.path):
+            raise ValueError("public resource paths cannot contain placeholders")
+        if len({variant.name for variant in self.variants}) != len(self.variants):
+            raise ValueError("public request variant names must be distinct")
+        if (
+            len(set(self.expected_statuses)) != len(self.expected_statuses)
+            or any(status < 200 or status > 599 for status in self.expected_statuses)
+        ):
+            raise ValueError("expected statuses must be distinct HTTP final-response codes")
+        if self.response_schema is not None:
+            try:
+                if not self.response_schema:
+                    raise ValueError
+                Draft202012Validator.check_schema(self.response_schema)
+            except Exception:
+                raise ValueError("invalid or empty public response JSON Schema") from None
+            stack = [self.response_schema]
+            while stack:
+                node = stack.pop()
+                if isinstance(node, dict):
+                    if any(key in node for key in ("$ref", "$dynamicRef", "$recursiveRef")):
+                        raise ValueError("v0.1 schemas must be inline; references are not resolved")
+                    stack.extend(node.values())
+                elif isinstance(node, list):
+                    stack.extend(node)
+        return self
+
+
 class Resource(Strict):
     name: str = Field(pattern=NAME)
     path: str = Field(min_length=1, max_length=512)
@@ -206,8 +290,11 @@ class Resource(Strict):
 
 class API(Strict):
     base_url: str
-    subjects: list[Subject] = Field(min_length=3, max_length=16)
-    resources: list[Resource] = Field(min_length=1, max_length=32)
+    subjects: list[Subject] = Field(default_factory=list, max_length=16)
+    resources: list[Resource] = Field(default_factory=list, max_length=32)
+    # Anonymous GET contracts are independent of the authorization matrix. They
+    # cover public response integrity, cache behavior and fail-fast latency.
+    public_resources: list[PublicResource] = Field(default_factory=list, max_length=32)
     # Additional fully contracted surfaces authorized for the active explorer.
     # Ordinary `check` ignores them; `explore` exposes them as bounded capabilities.
     exploration_resources: list[Resource] = Field(default_factory=list, max_length=32)
@@ -221,19 +308,38 @@ class API(Strict):
     @model_validator(mode="after")
     def valid(self):
         origin_key(self.base_url)
+        if not self.resources and not self.public_resources:
+            raise ValueError("at least one ordinary or public resource is required")
+        if self.exploration_resources and not self.resources:
+            raise ValueError("exploration resources require an ordinary baseline resource")
         if len({s.name for s in self.subjects}) != len(self.subjects):
             raise ValueError("duplicate subject")
         all_resources = [*self.resources, *self.exploration_resources]
+        all_names = [resource.name for resource in [*all_resources, *self.public_resources]]
+        if len(set(all_names)) != len(all_names):
+            raise ValueError("duplicate resource")
         if len({r.name for r in all_resources}) != len(all_resources):
             raise ValueError("duplicate resource")
         anonymous = [s for s in self.subjects if s.role == "anonymous"]
         authenticated = [s for s in self.subjects if s.role != "anonymous"]
-        if len(anonymous) != 1 or anonymous[0].token_env or anonymous[0].cookie_env:
-            raise ValueError("exactly one anonymous subject, without credentials, is required")
-        if any(bool(s.token_env) == bool(s.cookie_env) for s in authenticated):
-            raise ValueError("each authenticated subject needs exactly one credential reference")
-        if len({s.token_env or s.cookie_env for s in authenticated}) != len(authenticated):
-            raise ValueError("authenticated subjects must use different credential references")
+        if all_resources:
+            if len(self.subjects) < 3:
+                raise ValueError("authorization resources require at least three subjects")
+            if len(anonymous) != 1 or anonymous[0].token_env or anonymous[0].cookie_env:
+                raise ValueError("exactly one anonymous subject, without credentials, is required")
+            if any(bool(s.token_env) == bool(s.cookie_env) for s in authenticated):
+                raise ValueError("each authenticated subject needs exactly one credential reference")
+            if len({s.token_env or s.cookie_env for s in authenticated}) != len(authenticated):
+                raise ValueError("authenticated subjects must use different credential references")
+        elif self.subjects and (
+            len(self.subjects) != 1
+            or len(anonymous) != 1
+            or anonymous[0].token_env
+            or anonymous[0].cookie_env
+        ):
+            raise ValueError("public-only policies may omit subjects or declare one anonymous subject")
+        if any(resource.max_elapsed_ms > self.timeout_seconds * 1_000 for resource in self.public_resources):
+            raise ValueError("public max_elapsed_ms cannot exceed the API timeout")
         roles = {s.role for s in self.subjects}
         for r in all_resources:
             if any(a.role not in roles for a in r.allow):
@@ -258,6 +364,21 @@ class API(Strict):
                 if len(ids) != len(set(ids)):
                     raise ValueError("collection item IDs must be disjoint across subjects")
         return self
+
+
+def api_contract_digest(
+    config: API, *, include_exploration: bool = False, include_public: bool = True
+) -> str:
+    contract = config.model_dump(mode="json")
+    for operational in ("base_url", "timeout_seconds", "max_response_bytes", "max_cases"):
+        contract.pop(operational, None)
+    if not include_exploration:
+        contract.pop("exploration_resources", None)
+    if not include_public or not contract.get("public_resources"):
+        contract.pop("public_resources", None)
+    return hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 class Handoff(Strict):

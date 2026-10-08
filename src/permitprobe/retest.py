@@ -17,6 +17,11 @@ from permitprobe.api import (
     prepare_api,
 )
 from permitprobe.policy import API, PolicyError
+from permitprobe.public_contracts import (
+    execute_public_cases,
+    prepare_public,
+    public_case_descriptor,
+)
 from permitprobe.report import Report
 
 MAX_PRIOR_REPORT_BYTES = 10_000_000
@@ -230,34 +235,83 @@ def run_retest(
     if finding is None:
         raise PolicyError("finding does not exist in the prior report")
     report = Report()
-    prepared = prepare_api(
-        config,
-        report,
-        include_exploration=prior.get("exploration") is not None,
+    finding_evidence = finding.get("evidence_ids", [])
+    is_public = bool(finding_evidence) and all(
+        item.startswith("ppc-") for item in finding_evidence
     )
-    if prepared is None:
-        verdict: RetestVerdict = "inconclusive"
-        selected = []
-    elif prior["policy_digest"] != report.policy_digest:
-        report.add(
-            "retest.policy",
-            "inconclusive",
-            "retest",
-            "The current policy differs from the finding's original policy.",
-        )
-        verdict = "inconclusive"
-        selected = []
+    if any(item.startswith("ppc-") for item in finding_evidence) and not is_public:
+        raise PolicyError("finding mixes incompatible evidence types")
+
+    selected = []
+    if is_public:
+        prepared_public = prepare_public(config, report) if config.public_resources else None
+        if prepared_public is None:
+            verdict: RetestVerdict = "inconclusive"
+        elif prior["policy_digest"] != report.policy_digest:
+            report.add(
+                "retest.policy",
+                "inconclusive",
+                "retest",
+                "The current policy differs from the finding's original policy.",
+            )
+            verdict = "inconclusive"
+        else:
+            by_id = {case.id: case for case in prepared_public.cases}
+            try:
+                original = [by_id[item] for item in finding_evidence]
+            except KeyError:
+                raise PolicyError(
+                    "finding evidence is not present in the current policy"
+                ) from None
+            selected_ids = {case.id for case in original}
+            for resource in {case.resource.name for case in original}:
+                control = next(
+                    (
+                        case
+                        for case in prepared_public.cases
+                        if case.resource.name == resource and not case.variant.header_envs
+                    ),
+                    None,
+                )
+                if control:
+                    selected_ids.add(control.id)
+            selected = [case for case in prepared_public.cases if case.id in selected_ids]
+            report.planned_cases = {
+                case.id: public_case_descriptor(case) for case in selected
+            }
+            execute_public_cases(prepared_public, selected, report)
+            verdict = "inconclusive"
     else:
-        selected = select_retest_cases(prepared.cases, finding)
-        report.planned_cases = {case.id: case_descriptor(case) for case in selected}
-        observations = execute_api_cases(prepared, selected, report)
-        finalize_api(
-            prepared,
-            selected,
-            observations,
+        prepared = prepare_api(
+            config,
             report,
-            require_full_coverage=False,
+            include_exploration=prior.get("exploration") is not None,
+            include_public=prior.get("exploration") is None,
         )
+        if prepared is None:
+            verdict = "inconclusive"
+        elif prior["policy_digest"] != report.policy_digest:
+            report.add(
+                "retest.policy",
+                "inconclusive",
+                "retest",
+                "The current policy differs from the finding's original policy.",
+            )
+            verdict = "inconclusive"
+        else:
+            selected = select_retest_cases(prepared.cases, finding)
+            report.planned_cases = {case.id: case_descriptor(case) for case in selected}
+            observations = execute_api_cases(prepared, selected, report)
+            finalize_api(
+                prepared,
+                selected,
+                observations,
+                report,
+                require_full_coverage=False,
+            )
+            verdict = "inconclusive"
+
+    if selected:
         current_ids = {item["finding_id"] for item in report.finding_groups()}
         if report.exit_code == 2:
             verdict = "inconclusive"
