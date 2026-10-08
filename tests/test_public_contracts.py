@@ -689,6 +689,29 @@ def test_response_validation_is_stopped_by_total_budget(schema, body, monkeypatc
     assert report.evidence[next(iter(report.evidence))].observed == "unknown"
 
 
+def test_public_delivery_error_is_inconclusive(monkeypatch):
+    monkeypatch.setenv("PP_ATTACKER_COOKIE", ATTACKER_COOKIE)
+
+    async def failed_delivery(*_args, **_kwargs):
+        raise OSError("synthetic transport failure")
+
+    monkeypatch.setattr(api_module, "fetch", failed_delivery)
+    report = Report()
+    check_api(Policy.model_validate(public_policy()).api, report)
+
+    assert report.exit_code == 2
+    assert len(report.evidence) == 2
+    assert all(
+        evidence.delivery == "failed" and evidence.observed == "unknown"
+        for evidence in report.evidence.values()
+    )
+    assert all(
+        check.outcome == "inconclusive"
+        for check in report.checks
+        if check.code == "api.delivery"
+    )
+
+
 def test_response_security_validation_is_stopped_by_total_budget(monkeypatch):
     data = public_policy()
     resource = data["api"]["public_resources"][0]
