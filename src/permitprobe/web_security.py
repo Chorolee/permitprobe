@@ -71,7 +71,17 @@ def _hsts_matches(value: str | None, contract: HSTSContract) -> bool:
             return False
         directives[lowered] = argument.strip() if separator else None
     maximum = directives.get("max-age")
-    if maximum is None or not maximum.isdecimal() or int(maximum) < contract.min_max_age:
+    if maximum is None:
+        return False
+    if len(maximum) >= 2 and maximum.startswith('"') and maximum.endswith('"'):
+        maximum = maximum[1:-1]
+    if not re.fullmatch(r"[0-9]+", maximum):
+        return False
+    normalized = maximum.lstrip("0") or "0"
+    minimum = str(contract.min_max_age)
+    if len(normalized) < len(minimum) or (
+        len(normalized) == len(minimum) and normalized < minimum
+    ):
         return False
     if contract.include_subdomains and directives.get("includesubdomains", "missing") is not None:
         return False

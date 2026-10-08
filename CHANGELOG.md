@@ -26,6 +26,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized
+  response values from raising an integer-conversion exception, and accepts quoted decimal values.
 - Registry publication now resolves release tags inside the trusted full-history checkout and
   rejects any tag whose commit is not an ancestor of `main` before materializing its source.
 - Prior reports used for baselines, replay creation and finding retests now reject duplicate JSON

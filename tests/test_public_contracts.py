@@ -161,6 +161,10 @@ def public_server(scenario="safe"):
                     "Strict-Transport-Security",
                     "max-age=60"
                     if active_scenario == "web-weak-hsts"
+                    else 'max-age="63072000"; includeSubDomains; preload'
+                    if active_scenario == "web-quoted-hsts"
+                    else "max-age=" + "9" * 5_000 + "; includeSubDomains; preload"
+                    if active_scenario == "web-large-hsts"
                     else "max-age=63072000; includeSubDomains; preload",
                 )
                 if active_scenario == "web-duplicate-hsts":
@@ -338,6 +342,17 @@ def _security_environment(monkeypatch):
 )
 def test_cors_accepts_canonical_serialized_origins(origin):
     assert cors_origin_key(origin) is not None
+
+
+@pytest.mark.parametrize("scenario", ["web-quoted-hsts", "web-large-hsts"])
+def test_hsts_accepts_rfc_delta_seconds_without_fixed_width_integer_conversion(
+    scenario, monkeypatch
+):
+    _security_environment(monkeypatch)
+    with public_server(scenario) as (url, _):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
 
 
 def test_declared_response_security_contract_passes_without_retaining_values(monkeypatch):
