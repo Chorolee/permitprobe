@@ -385,7 +385,10 @@ def _cookie_jar(
                 break
             attributes[lowered] = argument
         else:
-            if any(attributes.get(flag) is not None for flag in ("secure", "httponly")):
+            if any(
+                attributes.get(flag) is not None
+                for flag in ("secure", "httponly", "partitioned")
+            ):
                 valid = False
                 continue
             result.setdefault(name, []).append(attributes)
@@ -399,8 +402,9 @@ def _cookie_matches(
     http_only = "httponly" in attributes
     same_site = (attributes.get("samesite") or "").lower()
     domain_present = "domain" in attributes
+    partitioned = "partitioned" in attributes
     path = attributes.get("path")
-    checks = [same_site != "none" or secure]
+    checks = [same_site != "none" or secure, not partitioned or secure]
     if contract.secure is not None:
         checks.append(secure is contract.secure)
     if contract.http_only is not None:

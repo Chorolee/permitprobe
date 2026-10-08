@@ -329,7 +329,9 @@ the corresponding contract.
 
 Declared response cookies are matched by exact cookie name. Each contract can require `Secure`,
 `HttpOnly`, accepted `SameSite` values, host-only scope and an exact Path. Duplicate matching
-cookies fail. `__Host-` and `__Secure-` declarations must include their prefix requirements:
+cookies fail. `Partitioned` is accepted only as a valueless attribute alongside `Secure`.
+`__Host-`, `__Secure-`, `__Http-` and `__Host-Http-` declarations must include their browser
+prefix requirements:
 
 ```json
 {

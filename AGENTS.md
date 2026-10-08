@@ -61,6 +61,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Browser-facing response checks must be explicit public-resource contracts. Never retain observed
   header, Origin, or cookie values in reports. Classify every declared Origin variant, preserve the
   GET-only boundary, and fail duplicate, malformed, reflected, or under-protected responses closed.
+- Enforce browser cookie acceptance prerequisites in addition to declared attributes: Partitioned
+  is valueless and requires Secure, while every supported security prefix keeps its full invariant.
 - Parse COOP and COEP as single structured-field items, keep CORP case-sensitive, and require the
   exact true structured boolean for origin agent clustering.
 - Validate HSTS delta-seconds without converting attacker-controlled digit strings to integers;

@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -12,11 +13,11 @@ import permitprobe.api as api_module
 import permitprobe.public_contracts as public_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
-from permitprobe.policy import Policy, api_contract_digest
+from permitprobe.policy import Policy, ResponseCookieContract, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import run_retest
 from permitprobe.scan import run_scan
-from permitprobe.web_security import cors_origin_key
+from permitprobe.web_security import cookie_results, cors_origin_key
 
 ATTACKER_COOKIE = "session=synthetic-attacker-shape"
 TRUSTED_ORIGIN = "https://trusted.example.invalid"
@@ -477,6 +478,51 @@ def test_unknown_cookie_flag_does_not_hide_declared_attributes(monkeypatch):
         report = Report()
         check_api(Policy.model_validate(secured_public_policy(url)).api, report)
     assert report.exit_code == 0, report.to_dict()
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("session=synthetic; HttpOnly; Partitioned", "fail"),
+        ("session=synthetic; Secure; HttpOnly; Partitioned", "pass"),
+        ("session=synthetic; Secure; HttpOnly; Partitioned=true", "fail"),
+    ],
+)
+def test_partitioned_cookie_must_be_valueless_and_secure(value, expected):
+    contract = ResponseCookieContract(name="session", http_only=True)
+    [(code, outcome, _)] = cookie_results(
+        [contract], httpx.Headers({"Set-Cookie": value})
+    )
+    assert code == "web.cookies"
+    assert outcome == expected
+
+
+@pytest.mark.parametrize(
+    "name,attributes",
+    [
+        ("__Http-session", {"secure": True, "http_only": False}),
+        (
+            "__Host-Http-session",
+            {"secure": True, "http_only": False, "host_only": True, "path": "/"},
+        ),
+    ],
+)
+def test_http_cookie_prefixes_require_httponly(name, attributes):
+    with pytest.raises(ValidationError):
+        ResponseCookieContract(name=name, **attributes)
+
+
+def test_http_cookie_prefixes_accept_their_complete_invariants():
+    assert ResponseCookieContract(
+        name="__Http-session", secure=True, http_only=True
+    )
+    assert ResponseCookieContract(
+        name="__Host-Http-session",
+        secure=True,
+        http_only=True,
+        host_only=True,
+        path="/",
+    )
 
 
 def test_response_security_finding_retests_with_the_same_header_controls(monkeypatch):
