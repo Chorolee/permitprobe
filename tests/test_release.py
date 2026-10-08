@@ -166,9 +166,22 @@ def test_dependency_installation_is_complete_and_hash_locked():
     assert "python -m pip install --no-deps -e ." in ci
     assert "python -m build --no-isolation" in ci
     assert (
-        "--require-hashes\n          --only-binary=:all:\n          -r requirements.lock"
+        "--require-hashes\n          --only-binary=:all:\n          -r verifier/requirements.lock"
         in publish
     )
+
+
+def test_publication_executes_only_the_main_branch_verifier():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github" / "workflows" / "publish-pypi.yml").read_text()
+    assert "path: verifier" in workflow
+    assert "path: release-source" in workflow
+    assert "-r verifier/requirements.lock" in workflow
+    assert "python verifier/scripts/verify_release.py" in workflow
+    assert "--source-root release-source" in workflow
+    assert "python verifier/scripts/smoke_wheel.py" in workflow
+    assert "python scripts/verify_release.py" not in workflow
+    assert "python scripts/smoke_wheel.py" not in workflow
 
 
 @pytest.fixture(scope="module")

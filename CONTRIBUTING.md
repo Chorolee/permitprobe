@@ -81,8 +81,10 @@ A pending publisher does not reserve a name or publish a package.
 Before publication, run **Publish verified release to PyPI** on `main` with the
 release tag and `publish=false`. This downloads the existing GitHub wheel and source
 distribution, verifies their GitHub SHA256 digests, checks package name/version, proves that the
-wheel package code and sdist build metadata match the checked-out release tag, then runs strict
-metadata validation and the installed-wheel smoke test. It does not rebuild or upload the package.
+wheel package code and sdist build metadata match the separately checked-out release tag, then runs
+strict metadata validation and the installed-wheel smoke test. The verifier, dependency lock,
+scanner installer and smoke harness always come from the trusted `main` workflow checkout; release
+tag contents cannot redefine their own verification. The validation run does not rebuild or upload.
 After account setup and a successful validation, run the same workflow with
 `publish=true`. Only the upload job receives the short-lived OIDC publishing permission.
 

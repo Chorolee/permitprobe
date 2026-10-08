@@ -30,6 +30,9 @@ while it is in the `0.x` development series.
 - Development, CI and release verification now install only SHA256-locked binary dependency files;
   PermitProbe and its wheel install without dependency resolution, and package builds reuse that
   verified environment instead of creating an unpinned isolated build environment.
+- PyPI verification executes its verifier, dependency lock, scanner installer and smoke harness
+  from trusted `main`; the requested tag is checked out separately and cannot redefine the code
+  that decides whether its release artifacts are publishable.
 
 ## [0.3.0] - 2026-10-09
 
