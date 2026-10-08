@@ -796,7 +796,8 @@ to an absolute binary path when it is not at `.tools/gitleaks`.
 
 Repository security automation runs Python CodeQL on pushes, pull requests and a weekly schedule.
 Pull requests also receive dependency review, while grouped Python and GitHub Actions updates are
-proposed weekly through Dependabot. Workflow actions remain pinned to full commit SHAs.
+proposed weekly through Dependabot. Workflow actions remain pinned to full commit SHAs, and jobs
+pin their Ubuntu release instead of following a moving `ubuntu-latest` label.
 
 ## What expanding verification means
 

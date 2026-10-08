@@ -59,3 +59,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   canonical request Origin values and the exact case-sensitive `true` credentials literal.
 - Treat prior reports as strict bounded JSON: reject duplicate keys, non-finite values and invalid
   Unicode before validating finding lineage or compiling any retest request.
+- Pin GitHub Actions to an explicit supported runner OS as well as full action SHAs; runner label
+  migrations must be an intentional reviewed change.
