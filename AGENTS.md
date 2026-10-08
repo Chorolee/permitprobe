@@ -9,6 +9,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Read local JSON inputs only from size-bounded regular files; resolve an intentional symlink to its
   final file and never block on a FIFO, socket, directory or device.
 - Unknown outcomes and failed positive controls must never produce a clean run.
+- Require one allow rule per resource role and reject anonymous `own` scope; ambiguous policy
+  entries must never widen the engine's expected authorization effect.
 - Reports contain labels and findings, not credentials, response bodies or scanned text.
 - Response-derived discovery labels remain reportable only through an explicit policy allowlist;
   entropy or length must never be treated as a confidentiality boundary.

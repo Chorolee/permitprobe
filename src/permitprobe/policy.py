@@ -543,6 +543,10 @@ class Resource(Strict):
     @model_validator(mode="after")
     def valid(self):
         params = path_params(self.path)
+        if len({rule.role for rule in self.allow}) != len(self.allow):
+            raise ValueError("resource roles must have one unambiguous allow rule")
+        if any(rule.role == "anonymous" and rule.scope != "any" for rule in self.allow):
+            raise ValueError("anonymous access cannot own a declared object")
         if self.kind == "object":
             if not self.owner_param or not self.owner_attr:
                 raise ValueError("object resources need ownership")
