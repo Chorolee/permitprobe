@@ -288,6 +288,28 @@ class Resource(Strict):
         return self
 
 
+class LinkedResource(Strict):
+    """Anonymous direct-read check tied to a protected source object."""
+
+    name: str = Field(pattern=NAME)
+    source_resource: str = Field(pattern=NAME)
+    origin: str = Field(max_length=512)
+    path: str = Field(min_length=1, max_length=512)
+    denial_statuses: list[Literal[401, 403, 404, 410]] = Field(
+        default_factory=lambda: [401, 403, 404],
+        min_length=1,
+        max_length=4,
+    )
+
+    @model_validator(mode="after")
+    def valid(self):
+        origin_key(self.origin)
+        path_params(self.path)
+        if len(set(self.denial_statuses)) != len(self.denial_statuses):
+            raise ValueError("linked denial statuses must be distinct")
+        return self
+
+
 class Discovery(Strict):
     """Fixed anonymous sources used only to propose same-origin GET coverage."""
 
@@ -326,6 +348,9 @@ class API(Strict):
     base_url: str
     subjects: list[Subject] = Field(default_factory=list, max_length=16)
     resources: list[Resource] = Field(default_factory=list, max_length=32)
+    # Anonymous direct reads at an explicitly pinned origin. Each is tied to a
+    # protected primary object whose successful self-case proves the fixture.
+    linked_resources: list[LinkedResource] = Field(default_factory=list, max_length=32)
     # Anonymous GET contracts are independent of the authorization matrix. They
     # cover public response integrity, cache behavior and fail-fast latency.
     public_resources: list[PublicResource] = Field(default_factory=list, max_length=32)
@@ -352,10 +377,15 @@ class API(Strict):
             raise ValueError("at least one ordinary or public resource is required")
         if self.exploration_resources and not self.resources:
             raise ValueError("exploration resources require an ordinary baseline resource")
+        if self.linked_resources and not self.resources:
+            raise ValueError("linked resources require an ordinary source resource")
         if len({s.name for s in self.subjects}) != len(self.subjects):
             raise ValueError("duplicate subject")
         all_resources = [*self.resources, *self.exploration_resources]
-        all_names = [resource.name for resource in [*all_resources, *self.public_resources]]
+        all_names = [
+            resource.name
+            for resource in [*all_resources, *self.public_resources, *self.linked_resources]
+        ]
         if len(set(all_names)) != len(all_names):
             raise ValueError("duplicate resource")
         if len({r.name for r in all_resources}) != len(all_resources):
@@ -403,11 +433,27 @@ class API(Strict):
                     ids.extend(owned)
                 if len(ids) != len(set(ids)):
                     raise ValueError("collection item IDs must be disjoint across subjects")
+        primary_by_name = {resource.name: resource for resource in self.resources}
+        for linked in self.linked_resources:
+            source = primary_by_name.get(linked.source_resource)
+            if (
+                source is None
+                or source.kind != "object"
+                or any(rule.role == "anonymous" for rule in source.allow)
+                or path_params(linked.path) != [source.owner_param]
+            ):
+                raise ValueError(
+                    "linked resources need one matching placeholder from a protected source object"
+                )
         return self
 
 
 def api_contract_digest(
-    config: API, *, include_exploration: bool = False, include_public: bool = True
+    config: API,
+    *,
+    include_exploration: bool = False,
+    include_public: bool = True,
+    include_linked: bool = True,
 ) -> str:
     contract = config.model_dump(mode="json")
     # Bind evidence to the exact normalized origin without retaining the URL in
@@ -426,6 +472,12 @@ def api_contract_digest(
         contract.pop("exploration_resources", None)
     if not include_public or not contract.get("public_resources"):
         contract.pop("public_resources", None)
+    if include_linked and contract.get("linked_resources"):
+        for item, linked in zip(contract["linked_resources"], config.linked_resources):
+            item["origin"] = list(origin_key(linked.origin))
+    else:
+        # Preserve existing/scoped digests when linked reads are absent or not executed.
+        contract.pop("linked_resources", None)
     # Preserve digests for policies written before optional proposal discovery
     # existed. Once configured, the complete discovery contract is digest-bound.
     if contract.get("discovery") is None:

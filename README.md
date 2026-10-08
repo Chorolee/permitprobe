@@ -136,8 +136,9 @@ The stages run in one bounded assessment:
 3. Read the fixed anonymous discovery sources when `api.discovery` is declared and propose
    same-origin paths that lack a check contract.
 4. Execute the declared authorization, public response, cache and latency GET checks.
-5. Classify exact reviewed findings through the optional baseline.
-6. Emit one exit code and one report with stage status, planned/observed request counts and
+5. Probe any declared linked edge/storage reads without forwarding credentials or reading bodies.
+6. Classify exact reviewed findings through the optional baseline.
+7. Emit one exit code and one report with stage status, planned/observed request counts and
    an explicit production-write count of zero.
 
 This is PermitProbe's current meaning of a one-shot website scan: one command covers the
@@ -372,6 +373,48 @@ override `no-store`. The rule checks headers only; actual cache behavior remains
 unverified. See [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.2).
 Denial responses do not run this optional header check.
 
+## Linked API/storage read boundaries (unreleased)
+
+A private object can be protected by its API while a direct edge or storage route remains public.
+Declare the direct route separately and bind it to the protected source object:
+
+```json
+"linked_resources": [
+  {
+    "name": "direct-private-documents",
+    "source_resource": "private-documents",
+    "origin": "https://objects.example.invalid",
+    "path": "/objects/{id}.pdf",
+    "denial_statuses": [403, 404]
+  }
+]
+```
+
+The linked path must contain the source object's one owner placeholder. PermitProbe first runs the
+ordinary authenticated self-case and establishes the exact object identity (or a structurally valid
+file-grant redirect). It then sends one credential-free GET to the pinned linked origin for every
+declared owner. Any `2xx` is `linked.public_access`; a declared `401`, `403`, `404` or `410` passes
+only when the source control succeeded. Redirects, server errors, delivery failures and denials
+without a valid source control remain inconclusive.
+
+Primary Authorization and Cookie values are never sent to the linked origin. The linked request
+uses a new client, ignores proxy environment variables, never follows a redirect, never reuses
+`Set-Cookie`, and closes after response headers without consuming a potentially private or binary
+body. The origin, object value, body, redirect destination and headers stay out of reports. Linked
+cases count toward `max_cases`, participate in one-shot `scan`, known-finding baselines and finding
+retests. A same-origin linked route participates in local OpenAPI coverage inventory; a separate
+storage origin remains outside the primary API document's inventory.
+
+Run the loopback fixtures without external credentials:
+
+```sh
+permitprobe demo-linked --scenario safe         # exit 0
+permitprobe demo-linked --scenario public-leak  # exit 1
+permitprobe demo-linked --scenario redirect     # exit 2
+```
+
+[examples/linked-reads.json](examples/linked-reads.json) contains the complete synthetic contract.
+
 Lists that omit an owner field can instead use `collection.item_pointer` and
 `collection.items_attr`, with each subject declaring `owned_items`, for example:
 
@@ -597,7 +640,8 @@ Applied baseline summaries list known, new, unobserved and expired entry IDs wit
 the underlying failure checks.
 One-shot reports additionally name each configured or skipped stage and record request counts,
 GET-only scope, optional proposal discovery, disabled automatic expansion, disabled redirect
-following and zero writes.
+following, linked-read contract counts, disabled credential forwarding/body consumption for linked
+origins, and zero writes.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. `api.validation_timeout_ms` additionally caps the cumulative local
@@ -620,9 +664,12 @@ total deadline.
   A wrong policy or overly permissive JSON Schema can produce misleading conclusions.
 - JSON Schemas are inline Draft 2020-12; reference resolution and format enforcement are
   not supported. Denial responses must also be valid JSON matching their declared schema.
-- These are API observations, **not** a proof of database grants, RLS, storage, GraphQL,
-  intermediary cache behavior, or write-path correctness. Cache checks cover response headers
-  only. The tool never connects to a database in v0.2.
+- These observations are **not** a proof of database grants, RLS, complete storage/bucket policy,
+  GraphQL, intermediary cache behavior, or write-path correctness. Cache checks cover response
+  headers only. The tool never connects to a database in v0.2.
+- Linked reads test anonymous reachability of exact seeded object paths. They do not validate
+  signed-token cryptography or expiry, enumerate a bucket, use a storage service credential, or
+  infer access rules for undeclared objects.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
   archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
 - Policy files, schemas, installed dependencies, scanner and exploration-provider executables
@@ -654,13 +701,13 @@ deployed application automatically.
 | Planned capability | Concrete question it would test |
 | --- | --- |
 | Declared datastore adapter | Can one authenticated user directly read another user's private row, even if the HTTP API denies it? |
-| Linked API/storage cases | Does a document denied by its API remain readable through a direct object URL or another declared route? |
+| Authenticated linked-route cases | Does a second declared API route enforce the same owner boundary for other signed-in users? |
 | Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
 
-These remaining items are **not implemented**. Finding history, bounded active exploration and
-declared exploration capabilities are in v0.2; sanitized case replay is implemented on `main` for
-the next release.
+These remaining items are **not implemented**. Finding history and bounded active exploration are
+in v0.2; sanitized case replay and linked API/storage reads are implemented on `main` for the next
+release.
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 

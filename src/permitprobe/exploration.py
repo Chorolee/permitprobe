@@ -517,6 +517,7 @@ def explore_api(
         report,
         include_exploration=True,
         include_public=False,
+        include_linked=False,
     )
     if prepared is None:
         trace = {

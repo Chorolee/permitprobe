@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://api.example.invalid",
+    "subjects": [
+      {
+        "name": "anon",
+        "role": "anonymous"
+      },
+      {
+        "name": "alice",
+        "role": "member",
+        "token_env": "PP_LINKED_ALICE_TOKEN",
+        "attributes": {
+          "document_id": "alice"
+        }
+      },
+      {
+        "name": "bob",
+        "role": "member",
+        "token_env": "PP_LINKED_BOB_TOKEN",
+        "attributes": {
+          "document_id": "bob"
+        }
+      }
+    ],
+    "resources": [
+      {
+        "name": "private-documents",
+        "path": "/documents/{id}",
+        "kind": "object",
+        "owner_param": "id",
+        "owner_attr": "document_id",
+        "identity_pointer": "/id",
+        "allow": [
+          {
+            "role": "member",
+            "scope": "own"
+          }
+        ],
+        "response_schema": {
+          "type": "object",
+          "required": [
+            "id",
+            "title"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          }
+        },
+        "denial_schema": {
+          "type": "object",
+          "required": [
+            "error"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "error": {
+              "const": "denied"
+            }
+          }
+        }
+      }
+    ],
+    "linked_resources": [
+      {
+        "name": "direct-private-documents",
+        "source_resource": "private-documents",
+        "origin": "https://objects.example.invalid",
+        "path": "/objects/{id}.pdf",
+        "denial_statuses": [
+          403,
+          404
+        ]
+      }
+    ]
+  }
+}

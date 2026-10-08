@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from permitprobe.policy import API, PolicyError, _unique, api_contract_digest
+from permitprobe.policy import API, PolicyError, _unique, api_contract_digest, origin_key
 from permitprobe.report import Report
 
 MAX_OPENAPI_BYTES = 5_000_000
@@ -223,7 +223,18 @@ def _surfaces(config: API) -> list[Surface]:
         )
         for resource in config.public_resources
     ]
-    return [*ordinary, *public]
+    origin = origin_key(config.base_url)
+    linked = [
+        Surface(
+            resource.name,
+            _normalize_path(resource.path),
+            "protected",
+            frozenset(),
+        )
+        for resource in config.linked_resources
+        if origin_key(resource.origin) == origin
+    ]
+    return [*ordinary, *public, *linked]
 
 
 def inventory_openapi(config: API, path: Path, report: Report) -> None:
@@ -255,7 +266,7 @@ def inventory_openapi(config: API, path: Path, report: Report) -> None:
                 "inventory.coverage",
                 "fail",
                 target,
-                "No ordinary or public check resource covers this GET operation.",
+                "No ordinary, public or same-origin linked check covers this GET operation.",
             )
             continue
         same_access = [surface for surface in same_path if surface.access == operation.access]

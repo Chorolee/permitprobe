@@ -261,6 +261,7 @@ def prepare_api(
     *,
     include_exploration: bool = False,
     include_public: bool = True,
+    include_linked: bool = True,
 ) -> PreparedAPI | None:
     for surface in ("api", "data"):
         if surface not in report.configured:
@@ -329,6 +330,7 @@ def prepare_api(
         config,
         include_exploration=include_exploration,
         include_public=include_public,
+        include_linked=include_linked,
     )
     report.plan([case_descriptor(case) for case in cases])
     return PreparedAPI(
@@ -636,15 +638,27 @@ def finalize_api(
 
 
 def check_api(config: API, report: Report) -> None:
+    from permitprobe.linked import execute_linked_cases, prepare_linked
     from permitprobe.public_contracts import execute_public_cases, prepare_public
 
     prepared = prepare_api(config, report) if config.resources else None
     if config.resources and prepared is None:
         return
+    linked = (
+        prepare_linked(config, prepared, report)
+        if config.linked_resources and prepared is not None
+        else None
+    )
+    if config.linked_resources and linked is None:
+        return
     public = prepare_public(config, report) if config.public_resources else None
     if config.public_resources and public is None:
         return
-    planned = (len(prepared.cases) if prepared else 0) + (len(public.cases) if public else 0)
+    planned = (
+        (len(prepared.cases) if prepared else 0)
+        + (len(linked.cases) if linked else 0)
+        + (len(public.cases) if public else 0)
+    )
     if planned > config.max_cases:
         report.add(
             "api.coverage",
@@ -662,6 +676,8 @@ def check_api(config: API, report: Report) -> None:
             validation_limiter=validation_limiter,
         )
         finalize_api(prepared, prepared.cases, observations, report)
+    if linked:
+        execute_linked_cases(linked, linked.cases, report)
     if public:
         execute_public_cases(
             public,
