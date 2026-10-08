@@ -37,12 +37,16 @@ jobs:
         with:
           path: verifier
           persist-credentials: false
-      - name: Check out the requested release source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: refs/tags/${{ inputs.tag }}
-          path: release-source
-          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Check out the requested release from trusted main history
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: >-
+          python verifier/scripts/checkout_release_source.py
+          --repository verifier
+          --tag "$RELEASE_TAG"
+          --output release-source
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.14'

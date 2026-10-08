@@ -24,6 +24,13 @@ spec = importlib.util.spec_from_file_location(
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
+checkout_spec = importlib.util.spec_from_file_location(
+    "checkout_release_source",
+    Path(__file__).resolve().parents[1] / "scripts/checkout_release_source.py",
+)
+checkout_module = importlib.util.module_from_spec(checkout_spec)
+checkout_spec.loader.exec_module(checkout_module)
+
 
 @pytest.fixture
 def release_pair(tmp_path):
@@ -175,13 +182,55 @@ def test_publication_executes_only_the_main_branch_verifier():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github" / "workflows" / "publish-pypi.yml").read_text()
     assert "path: verifier" in workflow
-    assert "path: release-source" in workflow
+    assert "fetch-depth: 0" in workflow
+    assert "fetch-tags: true" in workflow
+    assert "python verifier/scripts/checkout_release_source.py" in workflow
+    assert "ref: refs/tags/" not in workflow
     assert "-r verifier/requirements.lock" in workflow
     assert "python verifier/scripts/verify_release.py" in workflow
     assert "--source-root release-source" in workflow
     assert "python verifier/scripts/smoke_wheel.py" in workflow
     assert "python scripts/verify_release.py" not in workflow
     assert "python scripts/smoke_wheel.py" not in workflow
+
+
+def test_release_source_checkout_requires_a_tag_in_main_history(tmp_path):
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    git_executable = shutil.which("git")
+    assert git_executable is not None
+
+    def git(*arguments):
+        subprocess.run(
+            [git_executable, "-C", str(repository), *arguments],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+
+    git("init", "--initial-branch=main")
+    git("config", "user.name", "Synthetic Maintainer")
+    git("config", "user.email", "maintainer@example.invalid")
+    (repository / "source.txt").write_text("reviewed\n")
+    git("add", "source.txt")
+    git("commit", "-m", "reviewed release")
+    git("tag", "-a", "v1.2.3", "-m", "reviewed")
+
+    trusted = tmp_path / "trusted-source"
+    commit = checkout_module.checkout_release_source(repository, "v1.2.3", trusted)
+    assert re.fullmatch(r"[0-9a-f]{40}", commit)
+    assert (trusted / "source.txt").read_text() == "reviewed\n"
+
+    git("switch", "--orphan", "unreviewed")
+    (repository / "source.txt").write_text("unreviewed\n")
+    git("add", "source.txt")
+    git("commit", "-m", "unreviewed release")
+    git("tag", "v2.0.0")
+    git("switch", "main")
+    rejected = tmp_path / "rejected-source"
+    with pytest.raises(ValueError, match="rejected"):
+        checkout_module.checkout_release_source(repository, "v2.0.0", rejected)
+    assert not rejected.exists()
 
 
 def test_security_workflows_pin_the_runner_operating_system():

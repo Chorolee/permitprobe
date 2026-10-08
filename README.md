@@ -799,6 +799,10 @@ Pull requests also receive dependency review, while grouped Python and GitHub Ac
 proposed weekly through Dependabot. Workflow actions remain pinned to full commit SHAs, and jobs
 pin their Ubuntu release instead of following a moving `ubuntu-latest` label.
 
+Registry publication resolves the requested release tag inside that trusted full-history `main`
+checkout. Its exact commit must be an ancestor of `main` before PermitProbe materializes the release
+source, compares wheel and sdist bytes, or makes a distribution available to the publish job.
+
 ## What expanding verification means
 
 This means adding **security checks that users can apply to their services**, separately

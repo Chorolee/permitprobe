@@ -26,6 +26,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- Registry publication now resolves release tags inside the trusted full-history checkout and
+  rejects any tag whose commit is not an ancestor of `main` before materializing its source.
 - Prior reports used for baselines, replay creation and finding retests now reject duplicate JSON
   keys, non-finite numbers and invalid Unicode before they can influence a verdict or request.
 - CORS response checks now apply Fetch's byte-exact serialized Origin and case-sensitive
