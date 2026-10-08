@@ -271,6 +271,52 @@ def test_response_object_may_have_a_property_named_format():
 
 
 @pytest.mark.parametrize(
+    "keyword,value",
+    [
+        ("minLenght", 3),
+        ("dependencies", {"name": ["email"]}),
+        ("contentEncoding", "base64"),
+        ("x-security-check", True),
+    ],
+)
+def test_policy_rejects_silently_ignored_schema_keywords(keyword, value):
+    data = example_policy()
+    schema = data["api"]["resources"][0]["response_schema"]
+    schema["properties"]["title"][keyword] = value
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
+@pytest.mark.parametrize(
+    "dialect",
+    [
+        "http://json-schema.org/draft-07/schema#",
+        "https://json-schema.org/draft/2019-09/schema",
+        "https://json-schema.org/draft/2020-12/schema##",
+    ],
+)
+def test_policy_rejects_a_different_schema_dialect(dialect):
+    data = example_policy()
+    data["api"]["resources"][0]["response_schema"]["$schema"] = dialect
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
+def test_policy_accepts_supported_assertions_annotations_and_2020_dialect():
+    data = example_policy()
+    title = data["api"]["resources"][0]["response_schema"]["properties"]["title"]
+    title.update(
+        {
+            "$schema": "https://json-schema.org/draft/2020-12/schema#",
+            "description": "Synthetic title",
+            "minLength": 1,
+            "examples": [{"format": "example-data"}],
+        }
+    )
+    assert Policy.model_validate(data)
+
+
+@pytest.mark.parametrize(
     "text",
     [
         '{"version": 1, "version": 1}',

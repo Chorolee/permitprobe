@@ -34,6 +34,8 @@ while it is in the `0.x` development series.
   numeric complexity before either can alter a contract digest or runtime verdict.
 - Response and denial schemas now reject `format` assertions instead of silently treating them as
   annotations and creating false assurance that an email, URI, or other format was checked.
+- Executable response schemas now reject unknown, legacy, content-annotation and alternate-dialect
+  keywords instead of silently ignoring misspelled or unsupported security constraints.
 - Policy, OpenAPI, baseline, prior-report and replay inputs now resolve to bounded regular files and
   are opened nonblocking, preventing FIFOs or device paths from stalling an assessment.
 - Handoff scans now hash-pin the official Gitleaks executable itself and run a private verified
