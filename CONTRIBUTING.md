@@ -14,7 +14,9 @@ fetch schema references, and never convert a discovered operation into an execut
 Baseline changes must prove that new targets still fail, expired entries resurface, unobserved
 entries are retained, and any inconclusive check keeps exit code `2`.
 One-shot scan changes must test stage attribution, request counts, zero writes, and the rule that
-invalid offline inputs stop before live delivery. Discovery remains proposal-only until specified.
+invalid offline inputs stop before live delivery. Discovery changes must keep source requests
+fixed by policy, anonymous, same-origin and bounded; extracted locations remain sanitized,
+proposal-only and unrequested.
 
 The public contract is the policy schema, CLI, report schema, exit-code semantics, and
 checked-bundle manifest. Change them deliberately and update examples and tests together.

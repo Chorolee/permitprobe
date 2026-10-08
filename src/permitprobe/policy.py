@@ -288,6 +288,26 @@ class Resource(Strict):
         return self
 
 
+class Discovery(Strict):
+    """Fixed anonymous sources used only to propose same-origin GET coverage."""
+
+    seed_paths: list[str] = Field(default_factory=lambda: ["/"], min_length=1, max_length=4)
+    include_robots: bool = True
+    include_sitemap: bool = True
+    max_candidates: int = Field(default=128, ge=1, le=512)
+    max_response_bytes: int = Field(default=262_144, ge=1_024, le=1_000_000)
+    timeout_seconds: int = Field(default=5, ge=1, le=15)
+
+    @model_validator(mode="after")
+    def valid(self):
+        if len(set(self.seed_paths)) != len(self.seed_paths):
+            raise ValueError("discovery seed paths must be distinct")
+        for path in self.seed_paths:
+            if len(path) > 512 or path_params(path):
+                raise ValueError("discovery seeds must be concrete origin-relative paths")
+        return self
+
+
 class API(Strict):
     base_url: str
     subjects: list[Subject] = Field(default_factory=list, max_length=16)
@@ -298,6 +318,9 @@ class API(Strict):
     # Additional fully contracted surfaces authorized for the active explorer.
     # Ordinary `check` ignores them; `explore` exposes them as bounded capabilities.
     exploration_resources: list[Resource] = Field(default_factory=list, max_length=32)
+    # Discovery fetches only fixed anonymous sources and emits proposals. A
+    # discovered location never becomes an executable request.
+    discovery: Discovery | None = None
     # Probe every declared owner by default. A single representative victim can
     # miss a conditional authorization bug that affects only one owner pair.
     probe_victims: Literal["one", "all"] = "all"
@@ -376,6 +399,10 @@ def api_contract_digest(
         contract.pop("exploration_resources", None)
     if not include_public or not contract.get("public_resources"):
         contract.pop("public_resources", None)
+    # Preserve digests for policies written before optional proposal discovery
+    # existed. Once configured, the complete discovery contract is digest-bound.
+    if contract.get("discovery") is None:
+        contract.pop("discovery", None)
     return hashlib.sha256(
         json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()

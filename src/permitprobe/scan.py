@@ -4,6 +4,7 @@ from pathlib import Path
 
 from permitprobe.api import check_api
 from permitprobe.baseline import Baseline, apply_baseline
+from permitprobe.discovery import discover, record_discovery_blocked
 from permitprobe.handoff import check_handoff
 from permitprobe.openapi_inventory import inventory_openapi
 from permitprobe.policy import Policy, PolicyError
@@ -30,7 +31,7 @@ def run_scan(
     gitleaks: str | None = None,
     baseline: Baseline | None = None,
 ) -> None:
-    """Run offline inventory, handoff inspection, and declared live GET checks once."""
+    """Run inventory, handoff, fixed proposal discovery, and declared GET checks once."""
 
     if policy.api is None:
         raise PolicyError("one-shot scan requires an API policy")
@@ -43,18 +44,34 @@ def run_scan(
         for check in report.checks
     )
     if not handoff_incomplete:
+        discover(policy.api, report)
         check_api(policy.api, report)
+    else:
+        record_discovery_blocked(policy.api, report)
     if baseline is not None:
         apply_baseline(report, baseline)
 
     evidence = list(report.evidence.values())
+    discovery_sources = (
+        report.discovery["sources"]
+        if report.discovery is not None
+        else {"planned": 0, "attempted": 0, "completed": 0, "failed": 0}
+    )
     report.scan = {
-        "schema_version": 1,
+        "schema_version": 2,
         "mode": "declared_get_one_shot",
         "stages": {
             "openapi_inventory": {
                 "configured": openapi is not None,
                 "status": _stage_status(report, ("inventory.",), openapi is not None),
+            },
+            "passive_discovery": {
+                "configured": policy.api.discovery is not None,
+                "status": _stage_status(
+                    report,
+                    ("discovery.",),
+                    policy.api.discovery is not None,
+                ),
             },
             "live_get_checks": {
                 "configured": True,
@@ -82,15 +99,19 @@ def run_scan(
             },
         },
         "requests": {
-            "planned": len(report.planned_cases),
-            "observed": len(evidence),
-            "completed": sum(item.delivery == "complete" for item in evidence),
-            "failed": sum(item.delivery == "failed" for item in evidence),
+            "planned": len(report.planned_cases) + discovery_sources["planned"],
+            "observed": len(evidence) + discovery_sources["attempted"],
+            "completed": sum(item.delivery == "complete" for item in evidence)
+            + discovery_sources["completed"],
+            "failed": sum(item.delivery == "failed" for item in evidence)
+            + discovery_sources["failed"],
             "writes": 0,
         },
         "scope": {
             "methods": ["GET"],
             "automatic_discovery": False,
+            "proposal_discovery": policy.api.discovery is not None,
+            "discovered_requests_executed": 0,
             "redirects_followed": False,
         },
     }

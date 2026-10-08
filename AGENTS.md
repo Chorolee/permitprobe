@@ -18,5 +18,6 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   execution authority; only explicit PermitProbe resources may produce GET requests.
 - Known-finding baselines must keep failure checks visible, match exact code/target pairs,
   and never turn incomplete evidence, handoff failures or latency failures into a clean run.
-- One-shot scans orchestrate declared deterministic stages only. They must not turn OpenAPI,
-  page links, robots files or sitemaps into executable requests without a new explicit contract.
+- One-shot scans may read only discovery sources fixed by the explicit policy contract. Extracted
+  page links, redirects, robots entries and sitemap locations are sanitized proposals and must
+  never become requests automatically.

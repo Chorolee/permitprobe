@@ -58,10 +58,11 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
     assert payload["status"] == "pass"
     assert payload["unconfigured_surfaces"] == []
     assert payload["scan"] == {
-        "schema_version": 1,
+        "schema_version": 2,
         "mode": "declared_get_one_shot",
         "stages": {
             "openapi_inventory": {"configured": True, "status": "pass"},
+            "passive_discovery": {"configured": False, "status": "skipped"},
             "live_get_checks": {"configured": True, "status": "pass"},
             "handoff": {"configured": True, "status": "pass"},
             "known_finding_baseline": {"configured": False, "status": "skipped"},
@@ -76,6 +77,8 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
         "scope": {
             "methods": ["GET"],
             "automatic_discovery": False,
+            "proposal_discovery": False,
+            "discovered_requests_executed": 0,
             "redirects_followed": False,
         },
     }
