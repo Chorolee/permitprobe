@@ -181,6 +181,13 @@ def test_dependency_installation_is_complete_and_hash_locked():
     assert "--require-hashes\n          --only-binary=:all:\n          -r requirements.lock" in ci
     assert "python -m pip install --no-deps -e ." in ci
     assert "python -m build --no-isolation" in ci
+    scanner_install = ci.index("python scripts/install_gitleaks.py")
+    source_scan = ci.index(".tools/gitleaks dir .")
+    dependency_install = ci.index("Install hash-locked dependencies")
+    assert scanner_install < source_scan < dependency_install
+    assert "GITLEAKS_CONFIG_TOML" in ci
+    assert "--gitleaks-ignore-path /dev/null" in ci
+    assert "--ignore-gitleaks-allow" in ci
     assert (
         "--require-hashes\n          --only-binary=:all:\n          -r verifier/requirements.lock"
         in publish
