@@ -9,6 +9,8 @@ regression. Keep API authorization, response schemas, and handoff checks indepen
 usable. Document untested surfaces and errors explicitly; never trade them for a green exit.
 Exploration changes must remain model-neutral, use scripted fake providers in tests, and prove
 that unknown cases, broken provider output, failed controls and partial coverage cannot pass.
+OpenAPI inventory changes must remain offline: use synthetic local documents in tests, never
+fetch schema references, and never convert a discovered operation into an executable request.
 
 The public contract is the policy schema, CLI, report schema, exit-code semantics, and
 checked-bundle manifest. Change them deliberately and update examples and tests together.

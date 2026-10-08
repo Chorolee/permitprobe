@@ -1,0 +1,43 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Synthetic PermitProbe example",
+    "version": "1.0.0"
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/documents/{documentId}": {
+      "get": {
+        "operationId": "getDocument",
+        "responses": {
+          "200": {
+            "description": "Synthetic document"
+          },
+          "403": {
+            "description": "Denied"
+          }
+        }
+      },
+      "post": {
+        "operationId": "updateDocumentUnsupportedExample",
+        "responses": {
+          "405": {
+            "description": "GET-only example"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

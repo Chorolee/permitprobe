@@ -15,6 +15,7 @@ PermitProbe helps service operators validate:
 - cross-user authorization boundaries
 - unexpected API response fields
 - public-route response, cache, and fail-fast boundaries
+- OpenAPI GET-operation coverage against executable checks
 - secrets included in AI handoff files
 
 It is designed exclusively for systems the operator owns or is authorized to test.
@@ -109,6 +110,40 @@ Reports and exports are created exclusively; existing files are not overwritten.
 Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
+
+## Inventory an OpenAPI surface (unreleased; source checkout)
+
+Before running live checks, compare a local OpenAPI document with the GET resources that
+PermitProbe can actually execute:
+
+```sh
+permitprobe inventory-openapi examples/permitprobe.json \
+  --openapi examples/openapi.json --format json \
+  --report openapi-inventory.json
+```
+
+The command makes no network requests and does not resolve credential variables. It discovers
+OpenAPI 3.0, 3.1 and 3.2 operations, then checks every GET operation for:
+
+- a structurally matching ordinary or public PermitProbe resource;
+- agreement between the OpenAPI security requirement and the policy's public/protected surface;
+- coverage of every required query-parameter name; and
+- stale policy resources that no longer have a matching OpenAPI GET operation.
+
+Path placeholder names may differ (`{documentId}` matches `{id}`). Required query values are
+not imported; a public resource must still declare its own bounded values. Non-GET operations
+are counted as unsupported and never compiled into requests. An uncovered or mismatched GET
+exits `1`; an invalid or ambiguous document exits `2`.
+
+This is structural coverage, not proof that an owner placeholder, OpenAPI security scheme, or
+runtime authorization implementation is correct. Live boundary checks remain responsible for
+those conclusions.
+
+Input is a bounded local JSON file. Local parameter `$ref` values are resolved with a depth
+limit. External references, referenced path items, URLs, YAML, callbacks, webhooks and generated
+requests are outside this command's scope. Spec examples, response schemas and authentication
+values are not copied into the report. The report binds the result to the PermitProbe policy
+digest and the exact input document's SHA256 digest.
 
 ## Public and retired route contracts (unreleased; source checkout)
 
@@ -383,7 +418,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
+| PermitProbe | Strict configuration, offline OpenAPI-to-policy GET inventory, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -469,7 +504,13 @@ declared exploration capabilities are available in the unreleased source describ
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 
-## Design reference: ARTEX
+## Design references
+
+[Reference designs](docs/reference-designs.md) records the pinned Nuclei, Schemathesis,
+RESTler, ZAP and ARTEX revisions reviewed for PermitProbe, the concepts adapted, and the
+active boundaries that were deliberately retained.
+
+### ARTEX
 
 [ARTEX](https://github.com/Autumn-27/ARTEX) is an AI-driven penetration-testing system.
 Reference review: [revision b55ceb1](https://github.com/Autumn-27/ARTEX/tree/b55ceb1fdd84a813d77de09a06af83d323a81f85).

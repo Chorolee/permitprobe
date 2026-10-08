@@ -10,6 +10,7 @@ from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
 from permitprobe.exploration import ExternalProvider, StateWriter, explore_api
 from permitprobe.handoff import check_handoff, write_bundle
+from permitprobe.openapi_inventory import inventory_openapi
 from permitprobe.policy import Policy, PolicyError, load_policy
 from permitprobe.read_demo import SCENARIOS, run_read_demo
 from permitprobe.report import Report
@@ -42,6 +43,13 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
         for item in report.checks:
             if item.outcome != "pass":
                 print(f"  {item.outcome.upper()} {item.code} [{item.target}]: {item.detail}")
+        if payload["inventory"]:
+            inventory = payload["inventory"]
+            print(
+                "  OpenAPI GET coverage: "
+                f"{inventory['covered_get_operations']}/{inventory['get_operations']}; "
+                f"non-GET not executed: {inventory['unsupported_non_get_operations']}"
+            )
         if payload["unconfigured_surfaces"]:
             print("  Not configured: " + ", ".join(payload["unconfigured_surfaces"]))
     return report.exit_code
@@ -117,6 +125,14 @@ def parser() -> argparse.ArgumentParser:
     )
     export.add_argument("policy", type=Path)
     export.add_argument("--output", required=True, type=Path)
+    inventory = commands.add_parser(
+        "inventory-openapi",
+        help="Compare a local OpenAPI JSON document with declared GET checks",
+    )
+    inventory.add_argument("policy", type=Path)
+    inventory.add_argument("--openapi", required=True, type=Path)
+    inventory.add_argument("--format", choices=("text", "json"), default="text")
+    inventory.add_argument("--report", help="Create a new JSON report (never overwrite)")
     commands.add_parser("schema", help="Print the policy JSON Schema")
     return root
 
@@ -198,6 +214,12 @@ def main(argv: list[str] | None = None) -> int:
                 "Auth-only matrix exported. PermitProbe data/control checks are not part of this export."
             )
             return 0
+        if args.command == "inventory-openapi":
+            if not policy.api:
+                raise PolicyError("inventory-openapi needs an API policy")
+            report = Report()
+            inventory_openapi(policy.api, args.openapi, report)
+            return emit(report, args.format, args.report)
         report = Report()
         snapshot = {}
         if args.command == "check" and policy.api:
