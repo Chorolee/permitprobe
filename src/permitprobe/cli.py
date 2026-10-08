@@ -16,6 +16,7 @@ from permitprobe.policy import Policy, PolicyError, api_contract_digest, load_po
 from permitprobe.read_demo import SCENARIOS, run_read_demo
 from permitprobe.report import Report
 from permitprobe.retest import load_prior_report, run_retest
+from permitprobe.scan import run_scan
 
 
 def emit(report: Report, fmt: str, output: str | None = None) -> int:
@@ -58,6 +59,19 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
                 f"{inventory['covered_get_operations']}/{inventory['get_operations']}; "
                 f"non-GET not executed: {inventory['unsupported_non_get_operations']}"
             )
+        if payload["scan"]:
+            scan = payload["scan"]
+            stages = scan["stages"]
+            requests = scan["requests"]
+            print(
+                "  One-shot stages: "
+                + ", ".join(f"{name}={item['status']}" for name, item in stages.items())
+            )
+            print(
+                "  One-shot requests: "
+                f"{requests['observed']}/{requests['planned']} observed, "
+                f"{requests['writes']} writes"
+            )
         if payload["unconfigured_surfaces"]:
             print("  Not configured: " + ", ".join(payload["unconfigured_surfaces"]))
     return report.exit_code
@@ -65,7 +79,7 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
-        description="Check declared API, data and AI handoff boundaries."
+        description="Scan declared website, API, data and AI handoff boundaries."
     )
     root.add_argument("--version", action="version", version=__version__)
     commands = root.add_subparsers(dest="command", required=True)
@@ -152,6 +166,16 @@ def parser() -> argparse.ArgumentParser:
     baseline.add_argument("--output", required=True, type=Path)
     baseline.add_argument("--previous", type=Path)
     baseline.add_argument("--format", choices=("text", "json"), default="text")
+    scan = commands.add_parser(
+        "scan",
+        help="Run every deterministic declared website check in one assessment",
+    )
+    scan.add_argument("policy", type=Path)
+    scan.add_argument("--openapi", type=Path)
+    scan.add_argument("--baseline", type=Path)
+    scan.add_argument("--gitleaks", help="Path to Gitleaks 8.30.1; defaults to PATH lookup")
+    scan.add_argument("--format", choices=("text", "json"), default="text")
+    scan.add_argument("--report", help="Create a new JSON report (never overwrite)")
     commands.add_parser("schema", help="Print the policy JSON Schema")
     return root
 
@@ -259,6 +283,19 @@ def main(argv: list[str] | None = None) -> int:
             inventory_openapi(policy.api, args.openapi, report)
             if known:
                 apply_baseline(report, known)
+            return emit(report, args.format, args.report)
+        if args.command == "scan":
+            if not policy.api:
+                raise PolicyError("scan needs an API policy")
+            report = Report(policy_digest=known.policy_digest if known else None)
+            run_scan(
+                policy,
+                args.policy.parent,
+                report,
+                openapi=args.openapi,
+                gitleaks=args.gitleaks,
+                baseline=known,
+            )
             return emit(report, args.format, args.report)
         report = Report(policy_digest=known.policy_digest if known else None)
         snapshot = {}
