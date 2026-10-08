@@ -30,6 +30,7 @@ dev = [
   "pytest>=8,<10",
   "ruff>=0.12,<1",
   "build>=1.2,<2",
+  "wheel>=0.46,<1",
   "setuptools==84.0.0",
   "twine>=6,<8",
 ]

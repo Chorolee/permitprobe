@@ -17,6 +17,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
 - Keep the project and import-package versions identical. Release candidates must pass a fresh
   wheel install, strict metadata checks and the packaged safe demo before tagging.
+- Install development and release dependencies from the complete SHA256-locked requirements file,
+  install PermitProbe itself without dependency resolution, and build without an isolated resolver.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.

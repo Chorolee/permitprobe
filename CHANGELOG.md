@@ -27,6 +27,9 @@ while it is in the `0.x` development series.
   lifetime of verified publication artifacts.
 - Dependabot waits seven days before proposing ordinary new releases while security updates remain
   immediate, reducing exposure to newly published supply-chain compromises.
+- Development, CI and release verification now install only SHA256-locked binary dependency files;
+  PermitProbe and its wheel install without dependency resolution, and package builds reuse that
+  verified environment instead of creating an unpinned isolated build environment.
 
 ## [0.3.0] - 2026-10-09
 
