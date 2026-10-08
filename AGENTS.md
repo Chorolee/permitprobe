@@ -9,6 +9,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Response-derived discovery labels remain reportable only through an explicit policy allowlist;
   entropy or length must never be treated as a confidentiality boundary.
 - The library reuses Overstep and Gitleaks; do not silently widen their execution scope.
+- Keep live API credentials in PermitProbe's delivery layer; planning and classification engines
+  receive environment-reference placeholders rather than bearer-token or cookie values.
 - All fixtures are synthetic. Tests use loopback; never point tests at production.
 - Run `python -m pytest -q` and `ruff check src tests scripts` for behavior changes.
   Gitleaks 8.30.1 must be installed; missing-engine tests may not be silently skipped.

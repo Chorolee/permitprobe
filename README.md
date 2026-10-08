@@ -98,6 +98,8 @@ Edit `my-security-checks/permitprobe.json`:
 - Name one anonymous identity and at least two authenticated identities with distinct objects.
 - Point `token_env` at environment variables containing the corresponding bearer tokens.
   PermitProbe does not read dotenv files, create users, or obtain credentials.
+  Live values stay in PermitProbe's HTTP delivery layer; the planning and classification engine
+  receives only the environment-reference placeholders.
 - Declare each resource's allowed roles and `own`/`any` scope.
 - For object resources, name the URL parameter, identity attribute, and JSON pointer that
   proves a successful response actually returned the intended object.
