@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.api import case_descriptor, execute_api_cases, finalize_api, prepare_api
+from permitprobe.artifacts import write_private_json
 from permitprobe.exploration import baseline_cases
 from permitprobe.policy import API, PolicyError, _unique, api_contract_digest
 from permitprobe.report import Report
@@ -170,14 +170,7 @@ class ReplayManifest:
         return {"manifest_id": self.manifest_id, **self.unsigned_dict()}
 
     def write(self, path: Path) -> None:
-        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-                json.dump(self.to_dict(), handle, indent=2, ensure_ascii=False)
-                handle.write("\n")
-        except Exception:
-            path.unlink(missing_ok=True)
-            raise
+        write_private_json(path, self.to_dict(), ensure_ascii=False)
 
     @classmethod
     def from_dict(cls, data):

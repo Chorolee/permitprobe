@@ -8,6 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from permitprobe import __version__
+from permitprobe.artifacts import write_private_json
 from permitprobe.policy import PolicyError, _unique
 from permitprobe.report import Report
 from permitprobe.retest import _validate_prior_report
@@ -136,9 +137,7 @@ class Baseline:
         }
 
     def write(self, path: Path) -> None:
-        with path.open("x", encoding="utf-8") as handle:
-            json.dump(self.to_dict(), handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
+        write_private_json(path, self.to_dict(), ensure_ascii=False)
 
     @classmethod
     def load(cls, path: Path):

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.api import check_api, compile_matrix
+from permitprobe.artifacts import write_private_json
 from permitprobe.baseline import Baseline, apply_baseline, build_baseline
 from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
@@ -31,9 +32,7 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
     payload = report.to_dict()
     if output:
         try:
-            with Path(output).open("x", encoding="utf-8") as f:
-                json.dump(payload, f, indent=2)
-                f.write("\n")
+            write_private_json(Path(output), payload)
         except OSError:
             report.add(
                 "report.write",
@@ -320,9 +319,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.finding,
                 change_ref=args.change_ref,
             )
-            with args.output.open("x", encoding="utf-8") as handle:
-                json.dump(result, handle, indent=2)
-                handle.write("\n")
+            write_private_json(args.output, result)
             if args.format == "json":
                 print(json.dumps(result, indent=2))
             else:
@@ -334,9 +331,7 @@ def main(argv: list[str] | None = None) -> int:
             if not policy.api:
                 raise PolicyError("policy has no API surface")
             matrix = compile_matrix(policy.api)
-            with args.output.open("x", encoding="utf-8") as f:
-                json.dump(matrix, f, indent=2)
-                f.write("\n")
+            write_private_json(args.output, matrix)
             print(
                 "Auth-only matrix exported. PermitProbe data/control checks are not part of this export."
             )

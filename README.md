@@ -729,6 +729,8 @@ coverage and grouped findings. Public-contract evidence also records elapsed mil
 Reports still omit credential and request-header values, response bodies, query values,
 raw discovered URLs, redirect destinations and observed collection IDs. Discovery reports retain
 only normalized path shapes, policy-approved query names, counts and fixed source labels.
+New reports, baselines, replay manifests, retest records, authentication matrices, exploration
+state and checked bundles are created as owner-only files and never replace an existing artifact.
 Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Replay reports additionally retain only the manifest and source-report digests plus case counts;
 their ordinary evidence remains normalized in the same way as any declared API check.

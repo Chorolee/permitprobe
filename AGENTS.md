@@ -53,3 +53,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   exact true structured boolean for origin agent clustering.
 - Parse the complete bounded Permissions-Policy structured dictionary and require an exact empty
   allowlist for every feature declared disabled; never retain observed policy values.
+- Publish local reports, baselines, replay/retest records, matrices, state and checked bundles with
+  owner-only permissions; never replace an existing immutable artifact.

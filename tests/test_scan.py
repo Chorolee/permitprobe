@@ -1,5 +1,6 @@
 import json
 import os
+import stat
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,7 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
     assert exit_code == 0
     assert len(requests) == 6
     payload = json.loads(output.read_text())
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert json.loads(capsys.readouterr().out) == payload
     assert payload["status"] == "pass"
     assert payload["unconfigured_surfaces"] == []
