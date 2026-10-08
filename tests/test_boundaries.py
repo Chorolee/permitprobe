@@ -181,6 +181,22 @@ def test_closed_server_does_not_pass():
     assert any(c.code == "api.delivery" for c in report.checks)
 
 
+def test_classifier_error_does_not_pass(monkeypatch):
+    def failed_classifier(*_args, **_kwargs):
+        raise RuntimeError("synthetic classifier failure")
+
+    monkeypatch.setattr(api_module, "classify", failed_classifier)
+    with fixture_server() as (url, _), demo_environment():
+        report = Report()
+        check_api(Policy.model_validate(example_policy(url)).api, report)
+
+    assert report.exit_code == 2
+    assert any(
+        check.code == "api.engine" and check.outcome == "inconclusive"
+        for check in report.checks
+    )
+
+
 def test_proxy_environment_cannot_receive_tokens(monkeypatch):
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")

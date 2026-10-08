@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+import permitprobe.linked as linked_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
 from permitprobe.linked_demo import (
@@ -87,6 +88,34 @@ def test_linked_reads_ignore_proxy_environment(monkeypatch):
             check_api(Policy.model_validate(linked_policy(api, storage)).api, report)
     assert report.exit_code == 0
     assert len(storage_requests) == 2
+
+
+def test_linked_delivery_error_is_inconclusive(monkeypatch):
+    async def failed_delivery(*_args, **_kwargs):
+        raise OSError("synthetic transport failure")
+
+    monkeypatch.setattr(linked_module, "_fetch_status", failed_delivery)
+    with linked_servers("safe") as (api, storage, api_requests, storage_requests):
+        with linked_environment():
+            report = Report()
+            check_api(Policy.model_validate(linked_policy(api, storage)).api, report)
+
+    linked_evidence = [
+        evidence
+        for evidence in report.evidence.values()
+        if evidence.evidence_id.startswith("ppl-")
+    ]
+    assert report.exit_code == 2
+    assert len(api_requests) == 6
+    assert not storage_requests
+    assert len(linked_evidence) == 2
+    assert all(
+        evidence.delivery == "failed" and evidence.observed == "unknown"
+        for evidence in linked_evidence
+    )
+    delivery_checks = [check for check in report.checks if check.code == "linked.delivery"]
+    assert len(delivery_checks) == 2
+    assert all(check.outcome == "inconclusive" for check in delivery_checks)
 
 
 @pytest.mark.parametrize(

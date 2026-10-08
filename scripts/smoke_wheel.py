@@ -70,6 +70,7 @@ def smoke(wheel: Path, requirements: Path, gitleaks: Path) -> dict[str, str]:
             ],
             cwd=root,
         )
+        _run([str(python), "-m", "pip", "--isolated", "check"], cwd=root)
         observed_version = _run([*command, "--version"], cwd=root).strip()
         if observed_version != expected_version:
             raise ValueError("installed CLI version does not match the wheel")

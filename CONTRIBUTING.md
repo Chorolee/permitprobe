@@ -44,8 +44,9 @@ python scripts/smoke_wheel.py \
 ```
 
 The smoke test creates a new virtual environment outside the source tree, installs only the
-hash-locked binary dependency files, installs the wheel without dependency resolution, then runs
-the installed version command, policy-schema generator and safe loopback demo. Before tagging a
+hash-locked binary dependency files, installs the wheel without dependency resolution, verifies
+the installed dependency graph, then runs the installed version command, policy-schema generator
+and safe loopback demo. Before tagging a
 release, replace `Unreleased` with the release date in
 `CHANGELOG.md`, change the README and security policy to the new published line, and rerun the
 checks above. Create an annotated tag from that exact commit, build the two distributions from the
