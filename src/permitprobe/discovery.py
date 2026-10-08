@@ -129,7 +129,8 @@ def _shape_path(path: str, approved: set[str]) -> str:
 
 class _Candidates:
     def __init__(self, config: API):
-        assert config.discovery is not None
+        if config.discovery is None:
+            raise ValueError("discovery is not configured")
         self.config = config.discovery
         self.base_url = config.base_url.rstrip("/")
         self.origin = origin_key(config.base_url)
@@ -361,7 +362,8 @@ def _robots_references(text: str, path: str, limit: int) -> tuple[list[_Referenc
 def _sitemap_references(text: str, path: str, limit: int) -> tuple[list[_Reference], bool]:
     if re.search(r"<!\s*(?:DOCTYPE|ENTITY)\b", text, re.IGNORECASE):
         raise ValueError("unsupported XML declaration")
-    root = ElementTree.fromstring(text)
+    # DTD and entity declarations are rejected above before the bounded sitemap is parsed.
+    root = ElementTree.fromstring(text)  # noqa: S314
     root_name = root.tag.rsplit("}", 1)[-1].lower()
     if root_name not in {"urlset", "sitemapindex"}:
         raise ValueError("unsupported sitemap root")
@@ -489,7 +491,8 @@ def _record_source(
 
 
 def _empty_discovery(config: API, state: str, *, planned: int) -> dict:
-    assert config.discovery is not None
+    if config.discovery is None:
+        raise ValueError("discovery is not configured")
     return {
         "schema_version": 1,
         "mode": "bounded_same_origin_proposals",

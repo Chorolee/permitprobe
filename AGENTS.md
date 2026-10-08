@@ -32,6 +32,9 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   package bytes match the requested release tag.
 - Keep GitHub Actions pinned to full commit SHAs. Dependency updates must pass dependency review,
   CodeQL and the ordinary test/build workflow before release.
+- Keep Ruff security rules enabled for production code. Suppress a finding only at its reviewed
+  call site with a concrete trust-boundary comment; tests may ignore fixture-only assertions and
+  synthetic credentials.
 - Replay manifests may contain only digests and normalized case IDs. Replay must bind to the same
   target origin, require the exact deterministic baseline, revalidate every ID against the current
   policy catalogue, invoke no provider, and preserve the GET-only zero-write boundary.

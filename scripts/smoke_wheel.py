@@ -11,7 +11,8 @@ from pathlib import Path
 
 
 def _run(command: list[str], *, cwd: Path, timeout: int = 300) -> str:
-    result = subprocess.run(
+    # Callers construct argv from fixed module names and resolved release paths.
+    result = subprocess.run(  # noqa: S603
         command,
         cwd=cwd,
         capture_output=True,

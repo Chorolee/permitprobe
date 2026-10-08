@@ -126,7 +126,8 @@ def scan(snapshot: dict[str, bytes], report: Report, binary: str | None = None) 
     # No cloud/database/agent credentials, scanner config overrides, or proxy vars.
     env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
     try:
-        result = subprocess.run(
+        # The scanner path is resolved explicitly and its version is checked below.
+        result = subprocess.run(  # noqa: S603
             [executable, "version"], env=env, capture_output=True, timeout=10, check=False
         )
         if (
@@ -152,7 +153,8 @@ def scan(snapshot: dict[str, bytes], report: Report, binary: str | None = None) 
         (work / "ignore").write_text("")
         output = work / "findings.json"
         try:
-            result = subprocess.run(
+            # Only the previously resolved and version-pinned scanner is executed.
+            result = subprocess.run(  # noqa: S603
                 [
                     executable,
                     "dir",

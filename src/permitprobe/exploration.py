@@ -131,7 +131,8 @@ def _bounded_provider_call(
     stderr = bytearray()
     deadline = monotonic() + timeout_seconds
     try:
-        process = subprocess.Popen(
+        # The explicit absolute provider executable is a trusted policy input.
+        process = subprocess.Popen(  # noqa: S603
             command,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -139,9 +140,8 @@ def _bounded_provider_call(
             env=env,
             start_new_session=True,
         )
-        assert process.stdin is not None
-        assert process.stdout is not None
-        assert process.stderr is not None
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise ProviderError("provider did not expose the required pipes")
         for stream in (process.stdin, process.stdout, process.stderr):
             os.set_blocking(stream.fileno(), False)
         selector.register(process.stdin, selectors.EVENT_WRITE, ("stdin", None))
