@@ -440,6 +440,32 @@ every round. Its graph distinguishes subjects, resources, planned cases, hypothe
 observations, capability proposals and findings. Broken provider output, a timeout, repeated or
 unknown cases, missing evidence dependencies and exceeded budgets stop inconclusively.
 
+## Replay an exploration without AI (unreleased)
+
+Turn an exploration report or its private checkpoint into a small deterministic manifest:
+
+```sh
+permitprobe replay-create exploration-result.json \
+  --output exploration-replay.json
+
+permitprobe replay my-security-checks/permitprobe.json \
+  --manifest exploration-replay.json \
+  --report replay-result.json
+```
+
+The manifest contains the target-bound policy digest, a digest of the source report, the exact
+deterministic baseline case IDs and the additional completed case IDs scheduled during exploration.
+It contains no URL, credential, header, response body, query value, provider rationale or raw
+request. `replay-create` performs no network requests and creates the manifest privately (`0600`)
+without overwriting an existing file.
+
+`replay` does not invoke a provider. It accepts only case IDs still present in the current strict
+policy catalogue, requires the exact deterministic baseline, requires the same normalized target
+origin and sends GET requests through the ordinary bounded transport. A changed target or policy,
+missing baseline control, unknown case, incomplete delivery or failed positive control exits `2`.
+The replay report states the exact planned and observed counts and an explicit write count of zero.
+The manifest ID detects accidental edits; it is not a signature or proof of who created the file.
+
 ## Finding history and retests
 
 Schema-version-2 reports contain stable finding IDs, owner-specific evidence IDs and coverage
@@ -565,6 +591,8 @@ Reports still omit credential and request-header values, response bodies, query 
 raw discovered URLs, redirect destinations and observed collection IDs. Discovery reports retain
 only normalized path shapes, policy-approved query names, counts and fixed source labels.
 Unconfigured surfaces are named explicitly. An empty run cannot pass.
+Replay reports additionally retain only the manifest and source-report digests plus case counts;
+their ordinary evidence remains normalized in the same way as any declared API check.
 Applied baseline summaries list known, new, unobserved and expired entry IDs without removing
 the underlying failure checks.
 One-shot reports additionally name each configured or skipped stage and record request counts,
@@ -625,14 +653,14 @@ deployed application automatically.
 
 | Planned capability | Concrete question it would test |
 | --- | --- |
-| Database adapter (Supabase/pgTAP) | Can one authenticated user directly read another user's private row, even if the HTTP API denies it? |
+| Declared datastore adapter | Can one authenticated user directly read another user's private row, even if the HTTP API denies it? |
 | Linked API/storage cases | Does a document denied by its API remain readable through a direct object URL or another declared route? |
 | Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
-| Sanitized proposal replay | Which reviewed route proposal should become a declared, reproducible check without retaining raw requests? |
 
-These are **not implemented in v0.2**. Finding history, bounded active exploration and
-declared exploration capabilities are included in the current release as described above.
+These remaining items are **not implemented**. Finding history, bounded active exploration and
+declared exploration capabilities are in v0.2; sanitized case replay is implemented on `main` for
+the next release.
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 

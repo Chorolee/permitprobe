@@ -43,6 +43,7 @@ class Report:
     exploration: dict | None = None
     inventory: dict | None = None
     discovery: dict | None = None
+    replay: dict | None = None
     baseline: dict | None = None
     scan: dict | None = None
     _known_failure_keys: set[tuple[str, str]] = field(default_factory=set, repr=False)
@@ -136,6 +137,7 @@ class Report:
             "exploration": self.exploration,
             "inventory": self.inventory,
             "discovery": self.discovery,
+            "replay": self.replay,
             "baseline": self.baseline,
             "scan": self.scan,
             "checks": [asdict(c) for c in self.checks],

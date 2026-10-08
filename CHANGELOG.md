@@ -3,6 +3,15 @@
 All notable changes to PermitProbe are recorded here. The project uses semantic versioning
 while it is in the `0.x` development series.
 
+## [Unreleased]
+
+### Added
+
+- Exploration reports and checkpoints can produce a private sanitized replay manifest containing
+  only the target-bound policy digest, source-report digest and normalized case IDs. The manifest
+  reruns the exact deterministic baseline and completed exploration cases without invoking an AI
+  provider or storing URLs, credentials, headers or response bodies.
+
 ## [0.2.1] - 2026-10-08
 
 ### Security

@@ -30,3 +30,6 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   never become requests automatically.
 - Registry publication must verify downloaded asset digests and prove executable wheel/sdist
   package bytes match the requested release tag.
+- Replay manifests may contain only digests and normalized case IDs. Replay must bind to the same
+  target origin, require the exact deterministic baseline, revalidate every ID against the current
+  policy catalogue, invoke no provider, and preserve the GET-only zero-write boundary.

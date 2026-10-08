@@ -14,6 +14,12 @@ from permitprobe.handoff import check_handoff, write_bundle
 from permitprobe.openapi_inventory import inventory_openapi
 from permitprobe.policy import Policy, PolicyError, api_contract_digest, load_policy
 from permitprobe.read_demo import SCENARIOS, run_read_demo
+from permitprobe.replay import (
+    ReplayManifest,
+    build_replay_manifest,
+    load_replay_source,
+    run_replay,
+)
 from permitprobe.report import Report
 from permitprobe.retest import load_prior_report, run_retest
 from permitprobe.scan import run_scan
@@ -80,6 +86,13 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
                 "  One-shot requests: "
                 f"{requests['observed']}/{requests['planned']} observed, "
                 f"{requests['writes']} writes"
+            )
+        if payload["replay"]:
+            replay = payload["replay"]
+            print(
+                "  Replay cases: "
+                f"{replay['observed_cases']}/{replay['planned_cases']} observed, "
+                f"delivery={replay['delivery']}, {replay['writes']} writes"
             )
         if payload["unconfigured_surfaces"]:
             print("  Not configured: " + ", ".join(payload["unconfigured_surfaces"]))
@@ -151,6 +164,21 @@ def parser() -> argparse.ArgumentParser:
     retest.add_argument("--output", required=True, type=Path)
     retest.add_argument("--change-ref")
     retest.add_argument("--format", choices=("text", "json"), default="text")
+    replay_create = commands.add_parser(
+        "replay-create",
+        help="Create a sanitized deterministic manifest from an exploration report or state",
+    )
+    replay_create.add_argument("source", type=Path)
+    replay_create.add_argument("--output", required=True, type=Path)
+    replay_create.add_argument("--format", choices=("text", "json"), default="text")
+    replay = commands.add_parser(
+        "replay",
+        help="Run an exact sanitized exploration manifest without an AI provider",
+    )
+    replay.add_argument("policy", type=Path)
+    replay.add_argument("--manifest", required=True, type=Path)
+    replay.add_argument("--format", choices=("text", "json"), default="text")
+    replay.add_argument("--report", help="Create a new JSON report (never overwrite)")
     init = commands.add_parser("init", help="Create a starter in a NEW directory")
     init.add_argument("directory", type=Path)
     export = commands.add_parser(
@@ -226,7 +254,25 @@ def main(argv: list[str] | None = None) -> int:
                     f"{summary['carried_unobserved']} carried unobserved"
                 )
             return 0
+        if args.command == "replay-create":
+            manifest = build_replay_manifest(load_replay_source(args.source))
+            manifest.write(args.output)
+            if args.format == "json":
+                print(json.dumps(manifest.to_dict(), indent=2))
+            else:
+                print(
+                    "PermitProbe replay created: "
+                    f"{len(manifest.case_ids)} cases, "
+                    f"{len(manifest.baseline_case_ids)} deterministic baseline cases"
+                )
+            return 0
         policy = load_policy(args.policy)
+        if args.command == "replay":
+            if not policy.api:
+                raise PolicyError("replay needs an API policy")
+            report = Report()
+            run_replay(policy.api, ReplayManifest.load(args.manifest), report)
+            return emit(report, args.format, args.report)
         known = None
         if getattr(args, "baseline", None):
             if not policy.api:
