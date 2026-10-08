@@ -25,3 +25,10 @@ jobs:
       - run: ruff check src tests scripts
       - run: python -m pytest -q
       - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - name: Install and smoke-test the built wheel
+        run: >-
+          python scripts/smoke_wheel.py
+          --wheel dist/permitprobe-0.2.0-py3-none-any.whl
+          --constraint requirements.lock
+          --gitleaks .tools/gitleaks

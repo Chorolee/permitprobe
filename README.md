@@ -8,7 +8,8 @@ Maintainer: Susan (@Chorolee)<br>
 Security Maintainer: Susan (@Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
-License: Apache-2.0 · Current release: [v0.1.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.1.1)
+License: Apache-2.0<br>
+Published release: [v0.1.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.1.1) · Development version: [v0.2.0](docs/releases/v0.2.0.md)
 
 PermitProbe helps service operators validate:
 
@@ -30,15 +31,18 @@ It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization 
 classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
 contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
 
-Version **0.1.1** supports GET-only JSON REST APIs and explicit UTF-8 text-file handoffs on
-Linux/macOS. A passing result applies only to the declared cases and scanned bytes.
+Published version **0.1.1** supports GET-only JSON REST APIs and explicit UTF-8 text-file
+handoffs on Linux/macOS. The **v0.2.0 development source** adds the one-shot assessment,
+public-route, inventory, baseline, exploration, retest and proposal-discovery capabilities
+documented below. See the [changelog](CHANGELOG.md) and [v0.2.0 release notes](docs/releases/v0.2.0.md).
+A passing result applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
 
 Install the Python package from [PyPI](https://pypi.org/project/permitprobe/) (Python 3.11+):
 
 ```sh
-python -m pip install permitprobe
+python -m pip install 'permitprobe==0.1.1'
 permitprobe --version
 ```
 
@@ -113,7 +117,7 @@ Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
 
-## Run one declared website assessment (unreleased; source checkout)
+## Run one declared website assessment (v0.2.0 development source)
 
 `scan` is the one-command path through every deterministic surface declared for a site:
 
@@ -176,7 +180,7 @@ states `discovered_requests_executed: 0` and counts the fixed source requests se
 the declared live checks. The ordinary `check` command ignores `api.discovery`; this contract is
 used only by the one-shot `scan` workflow.
 
-## Inventory an OpenAPI surface (unreleased; source checkout)
+## Inventory an OpenAPI surface (v0.2.0 development source)
 
 Before running live checks, compare a local OpenAPI document with the GET resources that
 PermitProbe can actually execute:
@@ -210,7 +214,7 @@ requests are outside this command's scope. Spec examples, response schemas and a
 values are not copied into the report. The report binds the result to the PermitProbe policy
 digest and the exact input document's SHA256 digest.
 
-## Public and retired route contracts (unreleased; source checkout)
+## Public and retired route contracts (v0.2.0 development source)
 
 [examples/public-contracts.json](examples/public-contracts.json) checks anonymous GET
 routes without requiring test accounts. This supports public-only Cloudflare or edge
@@ -257,12 +261,12 @@ Reports retain the measured milliseconds but omit URLs, query values, header val
 response bodies. A public finding can be passed to `permitprobe retest`; the retest adds a
 header-free variant for the same resource when one is declared.
 
-## Private collections (unreleased; source checkout)
+## Private collections (v0.2.0 development source)
 
-The current source adds cookie authentication and per-item collection ownership checks.
-These additions are not in the published **v0.1.1** package. Install from this checkout
-using the development instructions above to run this example. Gitleaks is not needed
-for an API-only policy or this collection demo.
+The v0.2.0 development source adds cookie authentication and per-item collection ownership
+checks. These additions are not in the published **v0.1.1** package. Install from this checkout
+using the development instructions above to run this example. Gitleaks is not needed for an
+API-only policy or this collection demo.
 
 ```sh
 permitprobe demo-collection --scenario safe     # exit 0
@@ -310,7 +314,7 @@ Bearer authentication also works with collection rules.
 permitprobe check my-private-collection.json --format json
 ```
 
-## File grants and role boundaries (unreleased; source checkout)
+## File grants and role boundaries (v0.2.0 development source)
 
 [examples/read-paths.json](examples/read-paths.json) covers private attachments,
 published attachments, application documents, verification documents, and private
@@ -392,12 +396,13 @@ caller/owner pair is not hidden behind a representative victim. `"one"` remains 
 lower-cost option; its report proves only those selected pairs. `max_cases` is checked before
 delivery and prevents an unexpectedly large full matrix from sending any requests.
 
-## Active AI exploration (unreleased; source checkout)
+## Active AI exploration (v0.2.0 development source)
 
-The source checkout adds a bounded active explorer. The AI observes normalized results, forms
-hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains control of
-credentials, HTTP delivery, expected policy, classification, budgets, coverage and completion.
-The provider cannot create a URL, header, token, request body, shell command or tool call.
+The v0.2.0 development source adds a bounded active explorer. The AI observes normalized
+results, forms hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains
+control of credentials, HTTP delivery, expected policy, classification, budgets, coverage and
+completion. The provider cannot create a URL, header, token, request body, shell command or tool
+call.
 
 Providers use a JSON-over-stdio protocol, so Astra, Claude, Gemini, local models, agent
 frameworks and deterministic programs can all use the same contract. The core contains no
@@ -432,7 +437,7 @@ every round. Its graph distinguishes subjects, resources, planned cases, hypothe
 observations, capability proposals and findings. Broken provider output, a timeout, repeated or
 unknown cases, missing evidence dependencies and exceeded budgets stop inconclusively.
 
-## Finding history and retests (unreleased; source checkout)
+## Finding history and retests (v0.2.0 development source)
 
 Schema-version-2 reports contain stable finding IDs, owner-specific evidence IDs and coverage
 counts without response bodies or credentials. Retest one finding against the current policy:
@@ -452,7 +457,7 @@ one run alone is not called a fix. A prior report is rejected unless its checks 
 grouped findings exactly, so swapping a finding's evidence IDs cannot redirect the retest to
 benign cases. Prior reports remain unchanged and every retest carries its own lineage graph.
 
-## Known-finding baselines (unreleased; source checkout)
+## Known-finding baselines (v0.2.0 development source)
 
 A reviewed baseline lets CI distinguish accepted findings from new regressions while keeping
 every failed check and grouped finding in the report. First create a normal report, review its
@@ -576,7 +581,7 @@ cookie jars are not used. Declared redirect responses are checked from their hea
   not supported. Denial responses must also be valid JSON matching their declared schema.
 - These are API observations, **not** a proof of database grants, RLS, storage, GraphQL,
   intermediary cache behavior, or write-path correctness. Cache checks cover response headers
-  only. The tool never connects to a database in v0.1.
+  only. The tool never connects to a database in v0.2.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
   archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
 - Policy files, schemas, installed dependencies, scanner and exploration-provider executables
@@ -613,8 +618,8 @@ deployed application automatically.
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
 | Sanitized proposal replay | Which reviewed route proposal should become a declared, reproducible check without retaining raw requests? |
 
-These are **not implemented in v0.1**. Finding history, bounded active exploration and
-declared exploration capabilities are available in the unreleased source described above.
+These are **not implemented in v0.2**. Finding history, bounded active exploration and
+declared exploration capabilities are included in the v0.2.0 development source described above.
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 

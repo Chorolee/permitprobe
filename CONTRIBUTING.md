@@ -22,9 +22,38 @@ The public contract is the policy schema, CLI, report schema, exit-code semantic
 checked-bundle manifest. Change them deliberately and update examples and tests together.
 Public documentation is in English. Contributions are provided under Apache-2.0.
 
+## Preparing a release
+
+`main` currently carries development version 0.2.0; v0.1.1 remains the published release until
+the v0.2.0 tag and assets exist. A release commit must use the same stable version in
+`pyproject.toml`, `permitprobe.__version__`, the changelog, release notes and publishing-workflow
+default.
+
+From a clean checkout with Gitleaks 8.30.1 installed, run:
+
+```sh
+ruff check src tests scripts
+PERMITPROBE_GITLEAKS=.tools/gitleaks python -m pytest -q
+python -m build
+python -m twine check --strict dist/*
+python scripts/smoke_wheel.py \
+  --wheel dist/permitprobe-0.2.0-py3-none-any.whl \
+  --constraint requirements.lock \
+  --gitleaks .tools/gitleaks
+```
+
+The smoke test creates a new virtual environment outside the source tree, installs the wheel and
+its constrained dependencies, then runs the installed version command, policy-schema generator
+and safe loopback demo. Before tagging, replace `Unreleased` with the release date in
+`CHANGELOG.md`, change the README and security policy from development to published status, and
+rerun the checks above. Create an annotated tag from that exact commit, build the two distributions
+from the tag, and attach only the wheel and source archive to the matching non-prerelease GitHub
+Release. Do not rebuild between GitHub publication and registry publication.
+
 ## Publishing a verified GitHub release to PyPI
 
-PermitProbe v0.1.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.1.1/).
+PermitProbe v0.1.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.1.1/);
+v0.2.0 is prepared in source but is not published yet.
 The maintainer's GitHub Trusted Publisher is configured; subsequent releases can
 use the same workflow without creating another pending publisher.
 
@@ -51,7 +80,8 @@ A pending publisher does not reserve a name or publish a package.
 Before publication, run **Publish verified release to PyPI** on `main` with the
 release tag and `publish=false`. This downloads the existing GitHub wheel and source
 distribution, verifies their GitHub SHA256 digests, checks package name/version,
-and runs strict metadata validation. It does not rebuild or upload the package.
+then runs strict metadata validation and the installed-wheel smoke test. It does not rebuild
+or upload the package.
 After account setup and a successful validation, run the same workflow with
 `publish=true`. Only the upload job receives the short-lived OIDC publishing permission.
 
