@@ -26,6 +26,17 @@ SCENARIOS = (
     "empty",
     "server-error",
 )
+_OBJECT_ROUTES = {
+    path: (section, owner, filename, path)
+    for owner in ROLES
+    for section, filename in (
+        ("attachments", "private.png"),
+        ("attachments", "published.png"),
+        ("applications", "document.pdf"),
+        ("verifications", "document.pdf"),
+    )
+    for path in (f"/{section}/{owner}/{filename}",)
+}
 
 
 def read_policy(base_url: str = "https://staging.example.invalid") -> dict:
@@ -167,7 +178,7 @@ def read_server(scenario: str = "safe"):
             if active_scenario == "expired-auth" and subject == "alice":
                 subject = None
             requests.append((subject, self.path, dict(self.headers)))
-            parts = self.path.strip("/").split("/")
+            route = _OBJECT_ROUTES.get(self.path)
             status, body = 401, {"error": "denied"}
             location = None
             if subject and self.path == "/requests":
@@ -184,12 +195,8 @@ def read_server(scenario: str = "safe"):
                 if active_scenario == "malformed-and-foreign":
                     items = [{}, {"id": "unlisted", "detail": "synthetic-private-detail"}]
                 body = {"items": items}
-            elif (
-                subject
-                and len(parts) == 3
-                and parts[0] in {"attachments", "applications", "verifications"}
-            ):
-                section, owner, filename = parts
+            elif subject and route is not None:
+                section, owner, filename, canonical_path = route
                 allowed = owner == subject
                 if section == "attachments":
                     allowed |= (
@@ -211,7 +218,9 @@ def read_server(scenario: str = "safe"):
                     allowed |= subject in {"moderator", "admin"}
                 status = 302 if allowed else 403
                 if allowed:
-                    location = DESTINATION + "/signed" + self.path + "?token=" + SIGNED_SENTINEL
+                    location = (
+                        DESTINATION + "/signed" + canonical_path + "?token=" + SIGNED_SENTINEL
+                    )
                     if active_scenario == "wrong-location":
                         location = location.replace(DESTINATION, "https://wrong.example.invalid")
                     if active_scenario == "wrong-object":

@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -96,6 +97,16 @@ def test_irrelevant_redirect_body_cannot_hide_forbidden_grant(scenario):
     assert report.exit_code == 1, report.to_dict()
     assert any(c.code == "api.BOLA" and c.outcome == "fail" for c in report.checks)
     assert not any(c.outcome == "inconclusive" for c in report.checks)
+
+
+def test_read_demo_redirects_only_declared_fixture_paths():
+    with read_server("safe") as (url, _):
+        response = httpx.get(
+            url + "/attachments/alice/undeclared.bin",
+            headers={"Cookie": COOKIES["PP_ALICE_COOKIE"]},
+        )
+    assert response.status_code == 401
+    assert "location" not in response.headers
 
 
 @pytest.mark.parametrize(
