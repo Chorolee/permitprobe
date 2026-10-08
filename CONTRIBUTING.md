@@ -31,19 +31,22 @@ default.
 From a clean checkout with Gitleaks 8.30.1 installed, run:
 
 ```sh
+python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+python -m pip install --no-deps -e .
 ruff check src tests scripts
 PERMITPROBE_GITLEAKS=.tools/gitleaks python -m pytest -q
-python -m build
+python -m build --no-isolation
 python -m twine check --strict dist/*
 python scripts/smoke_wheel.py \
   --wheel dist/permitprobe-0.3.0-py3-none-any.whl \
-  --constraint requirements.lock \
+  --requirements requirements.lock \
   --gitleaks .tools/gitleaks
 ```
 
-The smoke test creates a new virtual environment outside the source tree, installs the wheel and
-its constrained dependencies, then runs the installed version command, policy-schema generator
-and safe loopback demo. Before tagging a release, replace `Unreleased` with the release date in
+The smoke test creates a new virtual environment outside the source tree, installs only the
+hash-locked binary dependency files, installs the wheel without dependency resolution, then runs
+the installed version command, policy-schema generator and safe loopback demo. Before tagging a
+release, replace `Unreleased` with the release date in
 `CHANGELOG.md`, change the README and security policy to the new published line, and rerun the
 checks above. Create an annotated tag from that exact commit, build the two distributions from the
 tag, and attach only the wheel and source archive to the matching non-prerelease GitHub Release.

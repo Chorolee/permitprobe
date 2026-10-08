@@ -25,13 +25,13 @@ def _run(command: list[str], *, cwd: Path, timeout: int = 300) -> str:
     return result.stdout
 
 
-def smoke(wheel: Path, constraint: Path, gitleaks: Path) -> dict[str, str]:
+def smoke(wheel: Path, requirements: Path, gitleaks: Path) -> dict[str, str]:
     wheel = wheel.resolve(strict=True)
-    constraint = constraint.resolve(strict=True)
+    requirements = requirements.resolve(strict=True)
     gitleaks = gitleaks.resolve(strict=True)
     match = re.fullmatch(r"permitprobe-([0-9]+\.[0-9]+\.[0-9]+)-py3-none-any\.whl", wheel.name)
-    if not match or not wheel.is_file() or not constraint.is_file() or not gitleaks.is_file():
-        raise ValueError("expected a stable PermitProbe wheel, constraint file and scanner")
+    if not match or not wheel.is_file() or not requirements.is_file() or not gitleaks.is_file():
+        raise ValueError("expected a stable PermitProbe wheel, locked requirements and scanner")
     expected_version = match.group(1)
 
     with tempfile.TemporaryDirectory(prefix="permitprobe-wheel-") as temporary:
@@ -49,8 +49,23 @@ def smoke(wheel: Path, constraint: Path, gitleaks: Path) -> dict[str, str]:
                 "install",
                 "--disable-pip-version-check",
                 "--no-input",
-                "--constraint",
-                str(constraint),
+                "--require-hashes",
+                "--only-binary=:all:",
+                "--requirement",
+                str(requirements),
+            ],
+            cwd=root,
+        )
+        _run(
+            [
+                str(python),
+                "-m",
+                "pip",
+                "--isolated",
+                "install",
+                "--disable-pip-version-check",
+                "--no-input",
+                "--no-deps",
                 str(wheel),
             ],
             cwd=root,
@@ -84,11 +99,17 @@ def smoke(wheel: Path, constraint: Path, gitleaks: Path) -> dict[str, str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wheel", type=Path, required=True)
-    parser.add_argument("--constraint", type=Path, default=Path("requirements.lock"))
+    parser.add_argument(
+        "--requirements",
+        "--constraint",
+        dest="requirements",
+        type=Path,
+        default=Path("requirements.lock"),
+    )
     parser.add_argument("--gitleaks", type=Path, required=True)
     args = parser.parse_args()
     try:
-        result = smoke(args.wheel, args.constraint, args.gitleaks)
+        result = smoke(args.wheel, args.requirements, args.gitleaks)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, json.JSONDecodeError):
         parser.exit(2, "Wheel smoke test failed.\n")
     print(json.dumps(result, sort_keys=True))

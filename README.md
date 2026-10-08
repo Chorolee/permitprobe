@@ -62,7 +62,8 @@ Python 3.11+ is required. From this repository:
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
-python -m pip install -c requirements.lock -e '.[dev]'
+python -m pip install --require-hashes --only-binary=:all: -r requirements.lock
+python -m pip install --no-deps -e .
 python scripts/install_gitleaks.py
 
 permitprobe demo --scenario safe --gitleaks .tools/gitleaks
@@ -680,8 +681,9 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
 | PermitProbe | One-shot orchestration of declared website checks, bounded same-origin proposal discovery, strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
-The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
-the tested Python dependency versions. Engine updates must pass the regression fixtures.
+The Gitleaks installer pins the release and archive hashes. `requirements.lock` pins the tested
+Python dependency versions and every accepted distribution SHA256; project installation then runs
+without dependency resolution. Engine and dependency updates must pass the regression fixtures.
 No code from a source-available-only security product is embedded here.
 
 An auth-only matrix can be exported for direct use with Overstep:

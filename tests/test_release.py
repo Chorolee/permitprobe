@@ -4,6 +4,7 @@ import csv
 import hashlib
 import importlib.util
 import io
+import re
 import shutil
 import subprocess
 import sys
@@ -116,6 +117,58 @@ def test_project_and_import_versions_match():
     assert f"dist/permitprobe-{VERSION}-py3-none-any.whl" in (
         root / ".github" / "workflows" / "ci.yml"
     ).read_text()
+
+
+def test_dependency_installation_is_complete_and_hash_locked():
+    root = Path(__file__).resolve().parents[1]
+    lines = (root / "requirements.lock").read_text().splitlines()
+    packages = set()
+    for index, line in enumerate(lines):
+        match = re.fullmatch(
+            r'([A-Za-z0-9][A-Za-z0-9_.-]*)==[^ ]+(?: ; python_version < "3\.12")? \\',
+            line,
+        )
+        if match is None:
+            continue
+        packages.add(match.group(1).lower().replace("_", "-"))
+        hashes = []
+        for follower in lines[index + 1 :]:
+            if not follower.startswith("    --hash="):
+                break
+            hashes.append(follower)
+        assert hashes
+        assert all(
+            re.fullmatch(r"    --hash=sha256:[a-f0-9]{64}(?: \\)?", item)
+            for item in hashes
+        )
+    assert {
+        "build",
+        "httpx",
+        "jsonschema",
+        "overstep",
+        "pydantic",
+        "pytest",
+        "ruff",
+        "setuptools",
+        "twine",
+        "wheel",
+    } <= packages
+    assert "boundaryguard" not in packages
+    for name in ("backports-tarfile", "importlib-metadata", "zipp"):
+        assert any(
+            line.startswith(name + "==") and '; python_version < "3.12"' in line
+            for line in lines
+        )
+
+    ci = (root / ".github" / "workflows" / "ci.yml").read_text()
+    publish = (root / ".github" / "workflows" / "publish-pypi.yml").read_text()
+    assert "--require-hashes\n          --only-binary=:all:\n          -r requirements.lock" in ci
+    assert "python -m pip install --no-deps -e ." in ci
+    assert "python -m build --no-isolation" in ci
+    assert (
+        "--require-hashes\n          --only-binary=:all:\n          -r requirements.lock"
+        in publish
+    )
 
 
 @pytest.fixture(scope="module")
