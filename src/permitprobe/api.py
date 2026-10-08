@@ -31,6 +31,11 @@ from permitprobe.validation import (
 
 OVERSTEP_VERSION = "1.5.0"
 DENIAL_STATUSES = {401, 403, 404}
+_REQUEST_COOKIE_NAME = re.compile(r"[!#$%&'*+.^_`|~A-Za-z0-9-]+")
+_REQUEST_COOKIE_VALUE = re.compile(
+    r'(?:(?:"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*")|'
+    r"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*)"
+)
 
 
 async def fetch(
@@ -67,9 +72,34 @@ async def fetch(
                 return response.status_code, body.decode("utf-8"), response.headers
 
 
+def _cookie_identity(value: str) -> tuple[tuple[str, str], ...]:
+    pairs = {}
+    for raw in value.split(";"):
+        pair = raw.strip(" ")
+        name, separator, cookie_value = pair.partition("=")
+        name = name.strip(" ")
+        cookie_value = cookie_value.strip(" ")
+        if (
+            not separator
+            or _REQUEST_COOKIE_NAME.fullmatch(name) is None
+            or _REQUEST_COOKIE_VALUE.fullmatch(cookie_value) is None
+            or name in pairs
+        ):
+            raise ValueError("invalid or ambiguous request cookie")
+        pairs[name] = (
+            cookie_value[1:-1]
+            if cookie_value.startswith('"') and cookie_value.endswith('"')
+            else cookie_value
+        )
+    if not pairs:
+        raise ValueError("empty request cookie")
+    return tuple(sorted(pairs.items()))
+
+
 def _subject_credentials(config: API, *, resolve: bool) -> dict[str, str | None]:
     credentials = {}
     seen_tokens = set()
+    seen_cookies = set()
     for s in config.subjects:
         token = None
         credential_env = s.token_env or s.cookie_env
@@ -84,6 +114,11 @@ def _subject_credentials(config: API, *, resolve: bool) -> dict[str, str | None]
                     or any(ord(c) < (32 if s.cookie_env else 33) or ord(c) > 126 for c in token)
                 ):
                     raise ValueError("missing, duplicated, or invalid subject credential")
+                if s.cookie_env:
+                    identity = _cookie_identity(token)
+                    if identity in seen_cookies:
+                        raise ValueError("duplicated subject cookie")
+                    seen_cookies.add(identity)
                 seen_tokens.add(token)
         credentials[s.name] = token
     return credentials

@@ -59,7 +59,24 @@ def test_private_collection_over_real_http(scenario, expected, rule):
 
 
 @pytest.mark.parametrize(
-    "credential", [None, "", "  ", "a=b\r\nx=y", "a=b\t", "a=é", "a=\x7f", "x" * 8193]
+    "credential",
+    [
+        None,
+        "",
+        "  ",
+        "a=b\r\nx=y",
+        "a=b\t",
+        "a=é",
+        "a=\x7f",
+        "missing-pair",
+        "a=b;",
+        "a=b;;c=d",
+        "a=b, c=d",
+        "a=b; a=c",
+        'a="unterminated',
+        'a="value with space"',
+        "x" * 8193,
+    ],
 )
 def test_bad_cookies_send_no_requests(credential, monkeypatch):
     with collection_server() as (url, requests), collection_environment():
@@ -76,6 +93,23 @@ def test_bad_cookies_send_no_requests(credential, monkeypatch):
 def test_duplicated_cookie_values_send_no_requests(monkeypatch):
     with collection_server() as (url, requests), collection_environment():
         monkeypatch.setenv("PP_BOB_COOKIE", DEMO_COOKIES["PP_ALICE_COOKIE"])
+        report = Report()
+        check_api(Policy.model_validate(collection_policy(url)).api, report)
+    assert not requests
+    assert report.exit_code == 2
+
+
+@pytest.mark.parametrize(
+    "equivalent",
+    [
+        "theme=light; session=synthetic-alice",
+        'session="synthetic-alice"; theme=light',
+        " session=synthetic-alice ;  theme=light ",
+    ],
+)
+def test_equivalent_cookie_sets_send_no_requests(equivalent, monkeypatch):
+    with collection_server() as (url, requests), collection_environment():
+        monkeypatch.setenv("PP_BOB_COOKIE", equivalent)
         report = Report()
         check_api(Policy.model_validate(collection_policy(url)).api, report)
     assert not requests
