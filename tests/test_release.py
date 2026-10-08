@@ -184,6 +184,16 @@ def test_publication_executes_only_the_main_branch_verifier():
     assert "python scripts/smoke_wheel.py" not in workflow
 
 
+def test_security_workflows_pin_the_runner_operating_system():
+    root = Path(__file__).resolve().parents[1]
+    workflows = list((root / ".github" / "workflows").glob("*.yml"))
+    assert workflows
+    for path in workflows:
+        workflow = path.read_text()
+        assert "ubuntu-latest" not in workflow
+        assert workflow.count("runs-on:") == workflow.count("runs-on: ubuntu-24.04")
+
+
 @pytest.fixture(scope="module")
 def built_distributions(tmp_path_factory):
     root = Path(__file__).resolve().parents[1]

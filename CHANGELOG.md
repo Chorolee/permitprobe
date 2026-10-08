@@ -17,6 +17,8 @@ while it is in the `0.x` development series.
 
 ### Changed
 
+- GitHub Actions jobs pin Ubuntu 24.04 so test, analysis and publication environments do not change
+  implicitly during the announced `ubuntu-latest` migration.
 - Public maintainer attribution uses the GitHub handle `@Chorolee` only. Package metadata contains
   no maintainer email address.
 - GitHub now runs pinned Python CodeQL and pull-request dependency review, with weekly grouped
