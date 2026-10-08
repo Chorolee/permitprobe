@@ -6,6 +6,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   1/new violation, 2/inconclusive.
 - Preserve exact finite JSON numbers and valid Unicode when loading policies; policy digests and
   response validators must see the same mathematical schema values.
+- Read local JSON inputs only from size-bounded regular files; resolve an intentional symlink to its
+  final file and never block on a FIFO, socket, directory or device.
 - Unknown outcomes and failed positive controls must never produce a clean run.
 - Reports contain labels and findings, not credentials, response bodies or scanned text.
 - Response-derived discovery labels remain reportable only through an explicit policy allowlist;

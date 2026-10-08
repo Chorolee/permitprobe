@@ -9,6 +9,7 @@ from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.artifacts import write_private_json
+from permitprobe.local_files import read_bounded_regular
 from permitprobe.policy import PolicyError, _unique
 from permitprobe.report import Report
 from permitprobe.retest import _validate_prior_report
@@ -142,10 +143,7 @@ class Baseline:
     @classmethod
     def load(cls, path: Path):
         try:
-            with path.open("rb") as handle:
-                raw = handle.read(MAX_BASELINE_BYTES + 1)
-            if len(raw) > MAX_BASELINE_BYTES:
-                raise ValueError
+            raw = read_bounded_regular(path, MAX_BASELINE_BYTES)
             data = json.loads(
                 raw,
                 object_pairs_hook=_unique,
