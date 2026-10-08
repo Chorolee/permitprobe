@@ -57,6 +57,7 @@ WINDOWS_DEVICE_NAMES = {
     "lpt³",
 }
 WINDOWS_INVALID_NAME_CHARACTERS = frozenset('<>:"\\|?*')
+WINDOWS_MAX_COMPONENT_UNITS = 255
 
 
 def _portable_path_key(name: str) -> str:
@@ -83,6 +84,10 @@ def _canonical_handoff_path(name: str) -> bool:
         or any(char in WINDOWS_INVALID_NAME_CHARACTERS for char in name)
         or any(not char.isprintable() for char in name)
         or any(part.endswith((".", " ")) for part in path.parts)
+        or any(
+            len(part.encode("utf-16-le")) // 2 > WINDOWS_MAX_COMPONENT_UNITS
+            for part in path.parts
+        )
         or _windows_device_path(path.parts)
     )
 

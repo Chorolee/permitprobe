@@ -29,6 +29,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   superscript-digit Windows aliases; checked bytes must always extract as ordinary files.
 - Reject characters that Win32 reserves in every file or directory name before a checked bundle
   can be published from a POSIX host.
+- Limit each bundle path component to 255 UTF-16 code units for common Windows filesystem
+  extraction, including snapshots passed directly to the bundle writer.
 - Keep examples, README and the generated policy schema synchronized.
 - Keep `docs/threat-model.md` synchronized with every new executable input, credential path,
   parser, report field, artifact path, trust assumption, and failure-to-pass transition.

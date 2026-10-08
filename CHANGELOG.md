@@ -51,6 +51,7 @@ while it is in the `0.x` development series.
   extension or legacy superscript digit, before creating an archive.
 - Checked bundle member paths now reject every Win32-reserved filename character before a POSIX
   name can become an unextractable or differently interpreted Windows archive entry.
+- Bundle paths now reject components longer than 255 UTF-16 code units before publication.
 - Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed

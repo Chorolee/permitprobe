@@ -696,8 +696,8 @@ uploaded or sent to an agent. Send the checked archive, not a re-read of the ori
 
 The built-in boundary refuses dotenv files, private-key files, credential directories,
 Git/private-memory directories, symlinks, hard links, non-regular files, binary content,
-path traversal, cross-platform case or Unicode path collisions, Windows-reserved characters and
-device names, and configured size overruns.
+path traversal, cross-platform case or Unicode path collisions, Windows-reserved characters,
+device names and overlong path components, and configured size overruns.
 User deny patterns win over allow patterns;
 neither can override the built-in exclusions. Glob patterns match the whole POSIX path,
 and `*` can cross directory separators. Include specific files rather than a broad `*`.
