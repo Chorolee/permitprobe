@@ -42,6 +42,7 @@ class Report:
     evidence: dict[str, Evidence] = field(default_factory=dict)
     exploration: dict | None = None
     inventory: dict | None = None
+    discovery: dict | None = None
     baseline: dict | None = None
     scan: dict | None = None
     _known_failure_keys: set[tuple[str, str]] = field(default_factory=set, repr=False)
@@ -134,6 +135,7 @@ class Report:
             "findings": self.finding_groups(),
             "exploration": self.exploration,
             "inventory": self.inventory,
+            "discovery": self.discovery,
             "baseline": self.baseline,
             "scan": self.scan,
             "checks": [asdict(c) for c in self.checks],

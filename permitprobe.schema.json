@@ -39,6 +39,17 @@
           "title": "Exploration Resources",
           "type": "array"
         },
+        "discovery": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Discovery"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "probe_victims": {
           "default": "all",
           "enum": [
@@ -166,6 +177,54 @@
         "items_pointer"
       ],
       "title": "Collection",
+      "type": "object"
+    },
+    "Discovery": {
+      "additionalProperties": false,
+      "description": "Fixed anonymous sources used only to propose same-origin GET coverage.",
+      "properties": {
+        "seed_paths": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Seed Paths",
+          "type": "array"
+        },
+        "include_robots": {
+          "default": true,
+          "title": "Include Robots",
+          "type": "boolean"
+        },
+        "include_sitemap": {
+          "default": true,
+          "title": "Include Sitemap",
+          "type": "boolean"
+        },
+        "max_candidates": {
+          "default": 128,
+          "maximum": 512,
+          "minimum": 1,
+          "title": "Max Candidates",
+          "type": "integer"
+        },
+        "max_response_bytes": {
+          "default": 262144,
+          "maximum": 1000000,
+          "minimum": 1024,
+          "title": "Max Response Bytes",
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "default": 5,
+          "maximum": 15,
+          "minimum": 1,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "Discovery",
       "type": "object"
     },
     "Handoff": {

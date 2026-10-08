@@ -16,6 +16,7 @@ PermitProbe helps service operators validate:
 - unexpected API response fields
 - public-route response, cache, and fail-fast boundaries
 - OpenAPI GET-operation coverage against executable checks
+- bounded same-origin route proposals from fixed public sources
 - reviewed known findings versus new regressions
 - secrets included in AI handoff files
 
@@ -128,19 +129,52 @@ The stages run in one bounded assessment:
 
 1. Compare the optional local OpenAPI document with executable GET contracts.
 2. Inspect explicitly selected AI-handoff text when the policy declares it.
-3. Execute the declared authorization, public response, cache and latency GET checks.
-4. Classify exact reviewed findings through the optional baseline.
-5. Emit one exit code and one report with stage status, planned/observed request counts and
+3. Read the fixed anonymous discovery sources when `api.discovery` is declared and propose
+   same-origin paths that lack a check contract.
+4. Execute the declared authorization, public response, cache and latency GET checks.
+5. Classify exact reviewed findings through the optional baseline.
+6. Emit one exit code and one report with stage status, planned/observed request counts and
    an explicit production-write count of zero.
 
 This is PermitProbe's current meaning of a one-shot website scan: one command covers the
 declared application surface without letting imported or discovered data expand execution.
-It does not crawl links, execute JavaScript, fuzz parameters, follow redirects or send writes.
-OpenAPI and handoff stages are optional and appear as `skipped` when absent. Future same-origin
-discovery must first produce reviewable proposals; discovery alone will not authorize requests.
+It does not recursively crawl, execute JavaScript, fuzz parameters, follow redirects or send
+writes. OpenAPI, handoff and proposal-discovery stages are optional and appear as `skipped`
+when absent.
 An invalid OpenAPI or baseline is rejected before the scan starts. An inconclusive declared
 handoff preflight also skips live delivery, so a partial local setup cannot look like a complete
 website assessment.
+
+### Propose routes from fixed public sources
+
+[examples/discovery.json](examples/discovery.json) enables proposal discovery inside `scan`:
+
+```json
+{
+  "discovery": {
+    "seed_paths": ["/", "/account"],
+    "include_robots": true,
+    "include_sitemap": true,
+    "max_candidates": 128,
+    "max_response_bytes": 262144,
+    "timeout_seconds": 5
+  }
+}
+```
+
+The only added requests are anonymous GETs to those exact seed paths plus `/robots.txt` and
+`/sitemap.xml` when enabled. PermitProbe parses navigation links, form actions, concrete robots
+paths and sitemap locations in memory. It accepts proposals only from the exact configured
+origin, omits query values, replaces identifier-shaped path segments with `{value}`, and records
+the source element or directive without retaining source text.
+
+A same-origin GET proposal with no matching `resources` or `public_resources` path exits `1` as
+`discovery.undeclared`. A source delivery, parse or truncation problem exits `2`. POST form
+actions are reported as unsupported metadata. Every proposal has `executable: false`; linked
+pages, redirect destinations, nested sitemaps and robots entries are never fetched. The report
+states `discovered_requests_executed: 0` and counts the fixed source requests separately from
+the declared live checks. The ordinary `check` command ignores `api.discovery`; this contract is
+used only by the one-shot `scan` workflow.
 
 ## Inventory an OpenAPI surface (unreleased; source checkout)
 
@@ -488,7 +522,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | One-shot orchestration of declared website checks, strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
+| PermitProbe | One-shot orchestration of declared website checks, bounded same-origin proposal discovery, strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -518,18 +552,22 @@ has its own behavior and scope.
 a local report file. Schema version 2 includes normalized evidence IDs, owner aliases,
 coverage and grouped findings. Public-contract evidence also records elapsed milliseconds.
 Reports still omit credential and request-header values, response bodies, query values,
-redirect destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
+raw discovered URLs, redirect destinations and observed collection IDs. Discovery reports retain
+only normalized path shapes, safe query names and fixed source labels. Unconfigured surfaces are
+named explicitly. An empty run cannot pass.
 Applied baseline summaries list known, new, unobserved and expired entry IDs without removing
 the underlying failure checks.
 One-shot reports additionally name each configured or skipped stage and record request counts,
-GET-only scope, disabled automatic discovery, disabled redirect following and zero writes.
+GET-only scope, optional proposal discovery, disabled automatic expansion, disabled redirect
+following and zero writes.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. Declared redirect responses are checked from their headers only.
 
 ## Scope and limitations
 
-- Only declared GET cases are tested. This is not a full application security audit.
+- Only declared GET cases and explicitly configured anonymous discovery sources are requested.
+  This is not a full application security audit.
 - A forbidden `2xx` response is an access-policy violation; content markers can strengthen
   evidence, but a status code alone does not prove a particular secret was disclosed.
 - The owner must supply the intended policy, real test identities, and existing test objects.
@@ -545,8 +583,8 @@ cookie jars are not used. Declared redirect responses are checked from their hea
   are trusted local inputs. Reports retain configured labels and filenames; do not put secrets
   in those names.
 - GET handlers must actually be safe to call. Choose a staging target with synthetic fixtures.
-- `scan` covers declared routes in one run; it is not a crawler or a claim of whole-internet-style
-  DAST coverage.
+- `scan` covers declared routes and can derive non-executable proposals from fixed public sources;
+  it is not a recursive crawler or a claim of whole-internet-style DAST coverage.
 
 ## Development
 
@@ -573,7 +611,7 @@ deployed application automatically.
 | Linked API/storage cases | Does a document denied by its API remain readable through a direct object URL or another declared route? |
 | Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
-| Active discovery beyond declared capabilities | Which new route, query or protocol capability should an operator authorize for a later bounded run? |
+| Sanitized proposal replay | Which reviewed route proposal should become a declared, reproducible check without retaining raw requests? |
 
 These are **not implemented in v0.1**. Finding history, bounded active exploration and
 declared exploration capabilities are available in the unreleased source described above.
@@ -583,7 +621,7 @@ incomplete-evidence case that must not pass.
 ## Design references
 
 [Reference designs](docs/reference-designs.md) records the pinned Nuclei, Schemathesis,
-RESTler, ZAP and ARTEX revisions reviewed for PermitProbe, the concepts adapted, and the
+RESTler, Katana, ZAP and ARTEX revisions reviewed for PermitProbe, the concepts adapted, and the
 active boundaries that were deliberately retained.
 
 ### ARTEX

@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "api": {
+    "base_url": "https://staging.example.invalid",
+    "timeout_seconds": 5,
+    "discovery": {
+      "seed_paths": [
+        "/",
+        "/account"
+      ],
+      "include_robots": true,
+      "include_sitemap": true,
+      "max_candidates": 128,
+      "max_response_bytes": 262144,
+      "timeout_seconds": 5
+    },
+    "public_resources": [
+      {
+        "name": "home",
+        "path": "/",
+        "expected_statuses": [
+          200
+        ],
+        "max_elapsed_ms": 1000
+      },
+      {
+        "name": "account",
+        "path": "/account",
+        "expected_statuses": [
+          200,
+          302,
+          307,
+          404
+        ],
+        "max_elapsed_ms": 1000
+      }
+    ]
+  }
+}

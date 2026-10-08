@@ -59,6 +59,15 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
                 f"{inventory['covered_get_operations']}/{inventory['get_operations']}; "
                 f"non-GET not executed: {inventory['unsupported_non_get_operations']}"
             )
+        if payload["discovery"]:
+            candidates = payload["discovery"]["candidates"]
+            sources = payload["discovery"]["sources"]
+            print(
+                "  Discovery proposals: "
+                f"{candidates['total']} total, {candidates['undeclared']} undeclared; "
+                f"fixed sources: {sources['completed']}/{sources['planned']} completed; "
+                "discovered requests executed: 0"
+            )
         if payload["scan"]:
             scan = payload["scan"]
             stages = scan["stages"]
