@@ -6,7 +6,7 @@ on:
       tag:
         description: Published GitHub release tag
         required: true
-        default: v0.2.1
+        default: v0.3.0
         type: string
       publish:
         description: Upload to PyPI (false validates the release without uploading)
