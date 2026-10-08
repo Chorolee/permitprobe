@@ -705,11 +705,9 @@ def test_public_delivery_error_is_inconclusive(monkeypatch):
         evidence.delivery == "failed" and evidence.observed == "unknown"
         for evidence in report.evidence.values()
     )
-    assert all(
-        check.outcome == "inconclusive"
-        for check in report.checks
-        if check.code == "api.delivery"
-    )
+    delivery_checks = [check for check in report.checks if check.code == "api.delivery"]
+    assert len(delivery_checks) == 2
+    assert all(check.outcome == "inconclusive" for check in delivery_checks)
 
 
 def test_response_security_validation_is_stopped_by_total_budget(monkeypatch):

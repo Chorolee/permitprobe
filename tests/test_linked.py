@@ -113,11 +113,9 @@ def test_linked_delivery_error_is_inconclusive(monkeypatch):
         evidence.delivery == "failed" and evidence.observed == "unknown"
         for evidence in linked_evidence
     )
-    assert all(
-        check.outcome == "inconclusive"
-        for check in report.checks
-        if check.code == "linked.delivery"
-    )
+    delivery_checks = [check for check in report.checks if check.code == "linked.delivery"]
+    assert len(delivery_checks) == 2
+    assert all(check.outcome == "inconclusive" for check in delivery_checks)
 
 
 @pytest.mark.parametrize(
