@@ -5,7 +5,7 @@ import ipaddress
 import json
 import re
 from decimal import Decimal
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -704,6 +704,22 @@ class Handoff(Strict):
 
     @model_validator(mode="after")
     def valid(self):
+        root = PurePosixPath(self.root)
+        if (
+            self.root != "."
+            and (
+                root.is_absolute()
+                or not root.parts
+                or ".." in root.parts
+                or "\\" in self.root
+                or str(root) != self.root
+                or self.root.endswith("/")
+                or ":" in self.root
+                or any(not char.isprintable() for char in self.root)
+                or any(part.endswith((".", " ")) for part in root.parts)
+            )
+        ):
+            raise ValueError("handoff root must be a canonical relative directory")
         if len(set(self.files)) != len(self.files):
             raise ValueError("duplicate handoff file")
         if any(

@@ -36,6 +36,8 @@ while it is in the `0.x` development series.
   matrix, which receives environment-reference placeholders while PermitProbe alone sends values.
 - Checked bundles reject case-insensitive and Unicode-normalization path collisions, including
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
+- Handoff roots must now be canonical paths relative to the real policy file; traversal, absolute
+  roots, private-directory roots and symlinked directory components are refused.
 - Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed
