@@ -350,6 +350,34 @@ def test_openapi_32_accepts_device_authorization_flow(tmp_path):
     assert report.exit_code == 0, report.to_dict()
 
 
+@pytest.mark.parametrize("version", ["3.1.0", "3.2.0"])
+def test_openapi_31_and_32_accept_non_oauth_role_names(tmp_path, version):
+    document = openapi_document()
+    document["openapi"] = version
+    document["security"] = [{"bearerAuth": ["reader"]}]
+    _, openapi_path = write_inputs(tmp_path, document=document)
+    report = Report()
+    inventory_openapi(Policy.model_validate(inventory_policy()).api, openapi_path, report)
+    assert report.exit_code == 0, report.to_dict()
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        {"type": "apiKey", "name": "X-API-Key", "in": "header"},
+        {"type": "http", "scheme": "bearer"},
+    ],
+)
+def test_openapi_30_rejects_nonempty_non_oauth_requirement(tmp_path, scheme):
+    document = openapi_document()
+    document["openapi"] = "3.0.4"
+    document["security"] = [{"bearerAuth": ["reader"]}]
+    document["components"]["securitySchemes"]["bearerAuth"] = scheme
+    _, openapi_path = write_inputs(tmp_path, document=document)
+    with pytest.raises(PolicyError):
+        inventory_openapi(Policy.model_validate(inventory_policy()).api, openapi_path, Report())
+
+
 def test_duplicate_keys_and_size_limit_are_rejected(tmp_path, monkeypatch):
     path = tmp_path / "openapi.json"
     path.write_text('{"openapi":"3.1.0","paths":{},"paths":{}}')
