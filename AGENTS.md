@@ -40,7 +40,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   parser, report field, artifact path, trust assumption, and failure-to-pass transition.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
 - Keep the project and import-package versions identical. Release candidates must pass a fresh
-  wheel install, strict metadata checks and the packaged safe demo before tagging.
+  wheel install, dependency-consistency check, strict metadata checks and the packaged safe demo
+  before tagging.
 - Install development and release dependencies from the complete SHA256-locked requirements file,
   install PermitProbe itself without dependency resolution, and build without an isolated resolver.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
