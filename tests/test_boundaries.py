@@ -401,9 +401,13 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
         ("Review.txt", "review.txt"),
         ("caf\N{LATIN SMALL LETTER E WITH ACUTE}.txt", "cafe\N{COMBINING ACUTE ACCENT}.txt"),
         (RECEIPT_NAME.lower(),),
+        ("NUL.txt",),
+        ("CONOUT$.log",),
+        ("COM\N{SUPERSCRIPT ONE}.txt",),
+        ("LPT9 .txt",),
     ],
 )
-def test_portable_archive_path_collisions_are_rejected(names, tmp_path):
+def test_nonportable_archive_paths_are_rejected(names, tmp_path):
     for name in names:
         (tmp_path / name).write_text("Synthetic review.\n")
     report = Report()
@@ -436,6 +440,7 @@ def test_portable_archive_path_collisions_are_rejected(names, tmp_path):
         "C:/review.txt",
         ".. /review.txt",
         "folder./review.txt",
+        "NUL/review.txt",
         "review\N{RIGHT-TO-LEFT OVERRIDE}.txt",
     ],
 )

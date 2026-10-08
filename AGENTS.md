@@ -23,6 +23,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   and open every directory component without following links or bypassing private directories.
 - Bundle member paths must remain unique after Unicode normalization and case folding, including
   the receipt name, so extraction cannot alias two separately checked entries.
+- Reject reserved device names in every bundle path component, including extension-bearing and
+  superscript-digit Windows aliases; checked bytes must always extract as ordinary files.
 - Keep examples, README and the generated policy schema synchronized.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
 - Keep the project and import-package versions identical. Release candidates must pass a fresh

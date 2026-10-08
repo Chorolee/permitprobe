@@ -40,6 +40,8 @@ while it is in the `0.x` development series.
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
 - Handoff roots must now be canonical paths relative to the real policy file; traversal, absolute
   roots, private-directory roots and symlinked directory components are refused.
+- Checked bundle member paths now reject Windows device-name aliases, including names with an
+  extension or legacy superscript digit, before creating an archive.
 - Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed

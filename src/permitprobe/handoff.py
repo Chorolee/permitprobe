@@ -40,10 +40,33 @@ GITLEAKS_BINARIES = {
 RECEIPT_NAME = "PERMITPROBE-MANIFEST.json"
 PRIVATE_DIRS = {".git", ".ssh", ".aws", ".azure", ".kube", ".memory", ".venv"}
 PRIVATE_FILES = {".gitleaks.toml", ".gitleaksignore", "credentials", "id_rsa", "id_ed25519"}
+WINDOWS_DEVICE_NAMES = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    "conin$",
+    "conout$",
+    *(f"com{index}" for index in range(1, 10)),
+    *(f"lpt{index}" for index in range(1, 10)),
+    "com¹",
+    "com²",
+    "com³",
+    "lpt¹",
+    "lpt²",
+    "lpt³",
+}
 
 
 def _portable_path_key(name: str) -> str:
     return unicodedata.normalize("NFC", name).casefold()
+
+
+def _windows_device_path(parts: tuple[str, ...]) -> bool:
+    return any(
+        _portable_path_key(part).split(".", 1)[0].rstrip(" .") in WINDOWS_DEVICE_NAMES
+        for part in parts
+    )
 
 
 def _canonical_handoff_path(name: str) -> bool:
@@ -60,6 +83,7 @@ def _canonical_handoff_path(name: str) -> bool:
         or ":" in name
         or any(not char.isprintable() for char in name)
         or any(part.endswith((".", " ")) for part in path.parts)
+        or _windows_device_path(path.parts)
     )
 
 
