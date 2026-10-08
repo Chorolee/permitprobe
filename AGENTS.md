@@ -39,3 +39,6 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   Forward primary credentials only for explicit `source_subjects` checks at the exact normalized
   primary origin. Never forward them cross-origin, follow redirects, consume linked response
   bodies, or call a denial safe when its object/caller controls were not established.
+- Browser-facing response checks must be explicit public-resource contracts. Never retain observed
+  header, Origin, or cookie values in reports. Classify every declared Origin variant, preserve the
+  GET-only boundary, and fail duplicate, malformed, reflected, or under-protected responses closed.

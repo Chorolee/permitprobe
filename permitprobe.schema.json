@@ -126,6 +126,66 @@
       "title": "Allow",
       "type": "object"
     },
+    "CORSContract": {
+      "additionalProperties": false,
+      "properties": {
+        "allow_variants": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Allow Variants",
+          "type": "array"
+        },
+        "deny_variants": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Deny Variants",
+          "type": "array"
+        },
+        "allow_credentials": {
+          "default": false,
+          "title": "Allow Credentials",
+          "type": "boolean"
+        },
+        "allow_wildcard": {
+          "default": false,
+          "title": "Allow Wildcard",
+          "type": "boolean"
+        },
+        "require_vary_origin": {
+          "default": true,
+          "title": "Require Vary Origin",
+          "type": "boolean"
+        }
+      },
+      "title": "CORSContract",
+      "type": "object"
+    },
+    "CSPContract": {
+      "additionalProperties": false,
+      "properties": {
+        "required_directives": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxProperties": 32,
+          "minProperties": 1,
+          "title": "Required Directives",
+          "type": "object"
+        }
+      },
+      "required": [
+        "required_directives"
+      ],
+      "title": "CSPContract",
+      "type": "object"
+    },
     "Collection": {
       "additionalProperties": false,
       "properties": {
@@ -256,6 +316,30 @@
         }
       },
       "title": "Discovery",
+      "type": "object"
+    },
+    "HSTSContract": {
+      "additionalProperties": false,
+      "properties": {
+        "min_max_age": {
+          "default": 31536000,
+          "maximum": 63072000,
+          "minimum": 0,
+          "title": "Min Max Age",
+          "type": "integer"
+        },
+        "include_subdomains": {
+          "default": false,
+          "title": "Include Subdomains",
+          "type": "boolean"
+        },
+        "preload": {
+          "default": false,
+          "title": "Preload",
+          "type": "boolean"
+        }
+      },
+      "title": "HSTSContract",
       "type": "object"
     },
     "Handoff": {
@@ -456,6 +540,17 @@
           ],
           "default": null,
           "title": "Response Schema"
+        },
+        "response_security": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseSecurityContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -676,6 +771,194 @@
         "denial_schema"
       ],
       "title": "Resource",
+      "type": "object"
+    },
+    "ResponseCookieContract": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "secure": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secure"
+        },
+        "http_only": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Http Only"
+        },
+        "same_site": {
+          "items": {
+            "enum": [
+              "strict",
+              "lax",
+              "none"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Same Site",
+          "type": "array"
+        },
+        "host_only": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host Only"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ResponseCookieContract",
+      "type": "object"
+    },
+    "ResponseSecurityContract": {
+      "additionalProperties": false,
+      "properties": {
+        "security_headers": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SecurityHeadersContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cookies": {
+          "items": {
+            "$ref": "#/$defs/ResponseCookieContract"
+          },
+          "maxItems": 16,
+          "title": "Cookies",
+          "type": "array"
+        },
+        "cors": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CORSContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "ResponseSecurityContract",
+      "type": "object"
+    },
+    "SecurityHeadersContract": {
+      "additionalProperties": false,
+      "properties": {
+        "hsts": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HSTSContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "content_type_options": {
+          "anyOf": [
+            {
+              "const": "nosniff",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Type Options"
+        },
+        "referrer_policy": {
+          "items": {
+            "enum": [
+              "no-referrer",
+              "no-referrer-when-downgrade",
+              "origin",
+              "origin-when-cross-origin",
+              "same-origin",
+              "strict-origin",
+              "strict-origin-when-cross-origin",
+              "unsafe-url"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Referrer Policy",
+          "type": "array"
+        },
+        "frame_options": {
+          "items": {
+            "enum": [
+              "deny",
+              "sameorigin"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Frame Options",
+          "type": "array"
+        },
+        "content_security_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CSPContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "SecurityHeadersContract",
       "type": "object"
     },
     "Subject": {

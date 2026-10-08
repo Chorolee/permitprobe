@@ -5,6 +5,12 @@ while it is in the `0.x` development series.
 
 ## [Unreleased]
 
+### Added
+
+- Public GET resources can declare browser-facing response contracts for HSTS, CSP,
+  `X-Content-Type-Options`, Referrer-Policy, X-Frame-Options, response-cookie attributes and CORS
+  behavior without retaining observed header, Origin or cookie values.
+
 ### Changed
 
 - Public maintainer attribution uses the GitHub handle `@Chorolee` only. Package metadata contains

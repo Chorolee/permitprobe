@@ -84,7 +84,7 @@ def run_scan(
                 "configured": True,
                 "status": _stage_status(
                     report,
-                    ("api.", "data.", "public.", "availability."),
+                    ("api.", "data.", "public.", "availability.", "web."),
                     True,
                 ),
             },

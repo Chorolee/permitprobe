@@ -31,6 +31,18 @@
             "header_envs": {
               "Cookie": "PP_SYNTHETIC_ATTACKER_COOKIE"
             }
+          },
+          {
+            "name": "trusted-origin",
+            "header_envs": {
+              "Origin": "PP_TRUSTED_ORIGIN"
+            }
+          },
+          {
+            "name": "hostile-origin",
+            "header_envs": {
+              "Origin": "PP_HOSTILE_ORIGIN"
+            }
           }
         ],
         "expected_statuses": [
@@ -49,6 +61,57 @@
             }
           },
           "additionalProperties": true
+        },
+        "response_security": {
+          "security_headers": {
+            "hsts": {
+              "min_max_age": 31536000,
+              "include_subdomains": true,
+              "preload": false
+            },
+            "content_type_options": "nosniff",
+            "referrer_policy": [
+              "strict-origin-when-cross-origin",
+              "no-referrer"
+            ],
+            "frame_options": [
+              "deny"
+            ],
+            "content_security_policy": {
+              "required_directives": {
+                "default-src": [
+                  "'none'"
+                ],
+                "frame-ancestors": [
+                  "'none'"
+                ]
+              }
+            }
+          },
+          "cookies": [
+            {
+              "name": "__Host-session",
+              "secure": true,
+              "http_only": true,
+              "same_site": [
+                "strict",
+                "lax"
+              ],
+              "host_only": true,
+              "path": "/"
+            }
+          ],
+          "cors": {
+            "allow_variants": [
+              "trusted-origin"
+            ],
+            "deny_variants": [
+              "hostile-origin"
+            ],
+            "allow_credentials": true,
+            "allow_wildcard": false,
+            "require_vary_origin": true
+          }
         }
       },
       {
