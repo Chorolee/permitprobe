@@ -59,6 +59,10 @@ and no shared cookie jar. The core constructs the URL, headers, query, and path 
 validated policy and selected case; provider output, OpenAPI content, and discovery proposals do
 not become request components.
 
+OpenAPI security requirements are validated against their declared version before they can mark a
+route protected. OAuth scopes must exist in the inline scheme, and non-OAuth requirement arrays
+follow the different OpenAPI 3.0 and 3.1+ rules.
+
 Hostnames use ordinary platform DNS resolution. PermitProbe does not pin an IP address or require
 successive resolutions to return the same address. HTTPS still validates the configured hostname,
 and credentials remain bound to that normalized name and port. A result therefore describes the
