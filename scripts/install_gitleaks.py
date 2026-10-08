@@ -50,6 +50,8 @@ def publish_binary(binary: bytes, output: Path) -> None:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(binary)
             os.fchmod(handle.fileno(), 0o755)
+            handle.flush()
+            os.fsync(handle.fileno())
         os.link(temporary, output)
     finally:
         temporary.unlink(missing_ok=True)

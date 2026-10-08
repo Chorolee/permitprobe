@@ -252,15 +252,29 @@ def test_scanner_binary_publication_is_complete_exclusive_and_executable(
     output = tmp_path / "tools" / "gitleaks"
     binary = b"synthetic verified scanner bytes"
     real_link = os.link
+    real_fsync = os.fsync
+    synced = set()
     observed = []
+
+    def track_fsync(descriptor):
+        info = os.fstat(descriptor)
+        synced.add((info.st_dev, info.st_ino))
+        real_fsync(descriptor)
 
     def inspect_before_publish(source, destination):
         source = Path(source)
+        info = source.stat()
         observed.append(
-            (output.exists(), source.read_bytes(), stat.S_IMODE(source.stat().st_mode))
+            (
+                output.exists(),
+                source.read_bytes(),
+                stat.S_IMODE(info.st_mode),
+                (info.st_dev, info.st_ino) in synced,
+            )
         )
         real_link(source, destination)
 
+    monkeypatch.setattr(installer_module.os, "fsync", track_fsync)
     monkeypatch.setattr(installer_module.os, "link", inspect_before_publish)
     previous_umask = os.umask(0)
     try:
@@ -268,7 +282,7 @@ def test_scanner_binary_publication_is_complete_exclusive_and_executable(
     finally:
         os.umask(previous_umask)
 
-    assert observed == [(False, binary, 0o755)]
+    assert observed == [(False, binary, 0o755, True)]
     assert output.read_bytes() == binary
     assert stat.S_IMODE(output.stat().st_mode) == 0o755
     with pytest.raises(FileExistsError):

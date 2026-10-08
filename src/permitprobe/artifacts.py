@@ -19,6 +19,8 @@ def write_private_json(path: Path, payload: object, *, ensure_ascii: bool = True
     try:
         with os.fdopen(descriptor, "wb") as handle:
             handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
         # Linking is an atomic no-overwrite publication. The mkstemp inode keeps mode 0600.
         os.link(temporary, path)
     finally:

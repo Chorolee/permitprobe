@@ -432,6 +432,8 @@ def write_bundle(snapshot: dict[str, bytes], destination: Path) -> None:
                 for name, body in sorted(snapshot.items()):
                     archive.writestr(name, body)
                 archive.writestr(RECEIPT_NAME, json.dumps(manifest, indent=2) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.link(temporary, destination)
     finally:
         os.unlink(temporary)

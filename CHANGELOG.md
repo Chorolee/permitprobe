@@ -64,6 +64,8 @@ while it is in the `0.x` development series.
   field-name list, so an `Origin` prefix cannot hide malformed remainder bytes.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
+- Reports, checked bundles, exploration state and installed scanner binaries now fsync their staged
+  inode before atomic publication; state permissions no longer depend on a path-based chmod.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized
   response values from raising an integer-conversion exception, and accepts quoted decimal values.
 - Registry publication now resolves release tags inside the trusted full-history checkout and
