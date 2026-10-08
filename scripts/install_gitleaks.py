@@ -4,8 +4,10 @@
 import argparse
 import hashlib
 import io
+import os
 import platform
 import tarfile
+import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -16,6 +18,23 @@ HASHES = {
     "darwin_x64": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
     "darwin_arm64": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
 }
+
+
+def publish_binary(binary: bytes, output: Path) -> None:
+    """Publish complete executable bytes at a new path without exposing a partial final file."""
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=".permitprobe-gitleaks-", dir=output.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(binary)
+            os.fchmod(handle.fileno(), 0o755)
+        os.link(temporary, output)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def main():
@@ -40,10 +59,10 @@ def main():
         if not member.isfile() or member.size > 100_000_000:
             parser.error("Unexpected archive member.")
         binary = archive.extractfile(member).read()
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("xb") as f:
-        f.write(binary)
-    args.output.chmod(0o755)
+    try:
+        publish_binary(binary, args.output)
+    except OSError:
+        parser.error("Cannot publish the verified scanner at a new output path.")
     print(f"Installed Gitleaks {VERSION}; pinned archive SHA256 verified.")
 
 

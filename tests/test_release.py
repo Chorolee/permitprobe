@@ -4,8 +4,10 @@ import csv
 import hashlib
 import importlib.util
 import io
+import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
@@ -30,6 +32,13 @@ checkout_spec = importlib.util.spec_from_file_location(
 )
 checkout_module = importlib.util.module_from_spec(checkout_spec)
 checkout_spec.loader.exec_module(checkout_module)
+
+installer_spec = importlib.util.spec_from_file_location(
+    "install_gitleaks",
+    Path(__file__).resolve().parents[1] / "scripts/install_gitleaks.py",
+)
+installer_module = importlib.util.module_from_spec(installer_spec)
+installer_spec.loader.exec_module(installer_module)
 
 
 @pytest.fixture
@@ -231,6 +240,46 @@ def test_release_source_checkout_requires_a_tag_in_main_history(tmp_path):
     with pytest.raises(ValueError, match="rejected"):
         checkout_module.checkout_release_source(repository, "v2.0.0", rejected)
     assert not rejected.exists()
+
+
+def test_scanner_binary_publication_is_complete_exclusive_and_executable(
+    tmp_path, monkeypatch
+):
+    output = tmp_path / "tools" / "gitleaks"
+    binary = b"synthetic verified scanner bytes"
+    real_link = os.link
+    observed = []
+
+    def inspect_before_publish(source, destination):
+        source = Path(source)
+        observed.append(
+            (output.exists(), source.read_bytes(), stat.S_IMODE(source.stat().st_mode))
+        )
+        real_link(source, destination)
+
+    monkeypatch.setattr(installer_module.os, "link", inspect_before_publish)
+    previous_umask = os.umask(0)
+    try:
+        installer_module.publish_binary(binary, output)
+    finally:
+        os.umask(previous_umask)
+
+    assert observed == [(False, binary, 0o755)]
+    assert output.read_bytes() == binary
+    assert stat.S_IMODE(output.stat().st_mode) == 0o755
+    with pytest.raises(FileExistsError):
+        installer_module.publish_binary(b"replacement", output)
+    assert output.read_bytes() == binary
+
+    victim = tmp_path / "victim"
+    victim.write_bytes(b"private")
+    symlink = tmp_path / "tools" / "linked-gitleaks"
+    symlink.symlink_to(victim)
+    with pytest.raises(FileExistsError):
+        installer_module.publish_binary(b"replacement", symlink)
+    assert symlink.is_symlink()
+    assert victim.read_bytes() == b"private"
+    assert not list(output.parent.glob(".permitprobe-gitleaks-*"))
 
 
 def test_security_workflows_pin_the_runner_operating_system():
