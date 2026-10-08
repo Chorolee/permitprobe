@@ -24,6 +24,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- CORS response checks now apply Fetch's byte-exact serialized Origin and case-sensitive
+  credentials literal rules instead of accepting normalized lookalikes that browsers reject.
 - Local security artifacts are published complete with owner-only permissions, independently of
   the invoking process's umask, and existing paths are never replaced.
 - The synthetic read-path demo emits redirects only for its declared canonical fixture paths;

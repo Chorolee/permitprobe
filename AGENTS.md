@@ -55,3 +55,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   allowlist for every feature declared disabled; never retain observed policy values.
 - Publish local reports, baselines, replay/retest records, matrices, state and checked bundles with
   owner-only permissions; never replace an existing immutable artifact.
+- Match CORS allow-origin values to the request's serialized Origin byte-for-byte and accept only
+  canonical request Origin values and the exact case-sensitive `true` credentials literal.

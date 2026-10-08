@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
+import ipaddress
 import re
 from urllib.parse import urlsplit
 
@@ -443,7 +444,33 @@ def cors_origin_key(value: str) -> tuple[str, str, int] | None:
         or port == 0
     ):
         return None
-    return parsed.scheme, hostname.lower(), port or (443 if parsed.scheme == "https" else 80)
+    hostname = hostname.lower()
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        core = hostname[:-1] if hostname.endswith(".") else hostname
+        labels = core.split(".")
+        if (
+            not hostname.isascii()
+            or not core
+            or len(core) > 253
+            or any(
+                not 1 <= len(label) <= 63 or not re.fullmatch(r"[a-z0-9_-]+", label)
+                for label in labels
+            )
+            or re.fullmatch(r"(?:[0-9]+|0x[0-9a-f]+)", labels[-1])
+        ):
+            return None
+        serialized_host = hostname
+    else:
+        serialized_host = f"[{address.compressed}]" if address.version == 6 else address.compressed
+    default_port = 443 if parsed.scheme == "https" else 80
+    serialized = f"{parsed.scheme}://{serialized_host}"
+    if port is not None and port != default_port:
+        serialized += f":{port}"
+    if value != serialized:
+        return None
+    return parsed.scheme, hostname, port or default_port
 
 
 def _header_value(headers: dict[str, str], name: str) -> str | None:
@@ -473,12 +500,11 @@ def cors_results(
     if request_key is None or len(values) > 1 or len(credentials) > 1:
         return [_result("web.cors", False, "CORS")]
     allowed_origin = values[0].strip() if values else None
-    credentials_true = bool(credentials) and credentials[0].strip().lower() == "true"
+    # Fetch compares the serialized Origin and credentials literal byte-for-byte.
+    credentials_true = bool(credentials) and credentials[0].strip() == "true"
     wildcard = allowed_origin == "*"
     reflected = (
-        allowed_origin is not None
-        and not wildcard
-        and cors_origin_key(allowed_origin) == request_key
+        allowed_origin is not None and not wildcard and allowed_origin == request_origin
     )
     malformed_wildcard = wildcard and credentials_true
     if variant in contract.deny_variants:
