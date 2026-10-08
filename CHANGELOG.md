@@ -21,6 +21,8 @@ while it is in the `0.x` development series.
 
 ### Changed
 
+- Loopback demo and regression servers now poll shutdown promptly, reducing local and CI test time
+  without changing the requests or security verdicts they exercise.
 - GitHub Actions jobs pin Ubuntu 24.04 so test, analysis and publication environments do not change
   implicitly during the announced `ubuntu-latest` migration.
 - Public maintainer attribution uses the GitHub handle `@Chorolee` only. Package metadata contains
