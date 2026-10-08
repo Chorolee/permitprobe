@@ -458,6 +458,28 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
     assert not list(tmp_path.glob(".permitprobe-*"))
 
 
+def test_bundle_syncs_complete_inode_before_publication(tmp_path, monkeypatch):
+    real_fsync = os.fsync
+    real_link = os.link
+    synced = set()
+    published = []
+
+    def track_fsync(descriptor):
+        info = os.fstat(descriptor)
+        synced.add((info.st_dev, info.st_ino))
+        real_fsync(descriptor)
+
+    def inspect_before_publish(source, destination):
+        info = Path(source).stat()
+        published.append((info.st_dev, info.st_ino) in synced)
+        real_link(source, destination)
+
+    monkeypatch.setattr(os, "fsync", track_fsync)
+    monkeypatch.setattr(os, "link", inspect_before_publish)
+    write_bundle({"safe.txt": b"synthetic"}, tmp_path / "bundle.zip")
+    assert published == [True]
+
+
 @pytest.mark.parametrize(
     "names",
     [

@@ -12,12 +12,27 @@ def test_private_json_is_complete_owner_only_and_independent_of_umask(tmp_path, 
     output = tmp_path / "report.json"
     payload = {"status": "pass", "labels": ["private-resource", "한글"]}
     real_link = os.link
+    real_fsync = os.fsync
+    synced = set()
     observed = []
 
+    def track_fsync(descriptor):
+        info = os.fstat(descriptor)
+        synced.add((info.st_dev, info.st_ino))
+        real_fsync(descriptor)
+
     def inspect_before_publish(source, destination):
-        observed.append((output.exists(), json.loads(Path(source).read_text())))
+        info = Path(source).stat()
+        observed.append(
+            (
+                output.exists(),
+                json.loads(Path(source).read_text()),
+                (info.st_dev, info.st_ino) in synced,
+            )
+        )
         real_link(source, destination)
 
+    monkeypatch.setattr(os, "fsync", track_fsync)
     monkeypatch.setattr(os, "link", inspect_before_publish)
     previous_umask = os.umask(0)
     try:
@@ -25,7 +40,7 @@ def test_private_json_is_complete_owner_only_and_independent_of_umask(tmp_path, 
     finally:
         os.umask(previous_umask)
 
-    assert observed == [(False, payload)]
+    assert observed == [(False, payload, True)]
     assert json.loads(output.read_text()) == payload
     assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert not list(tmp_path.glob(".permitprobe-*"))

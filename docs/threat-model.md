@@ -100,9 +100,10 @@ bytes. The archive is then built from those checked bytes rather than by rereadi
 
 Reports and other immutable artifacts are created at a new path with owner-only permissions.
 Exploration state also starts at a new owner-only path, then uses atomic replacement for its
-checkpoints. These guarantees assume a trusted parent directory and local account. PermitProbe is
-not a defense against another process with the same account privileges, a hostile output-directory
-owner, filesystem rollback, or a compromised kernel.
+checkpoints. Complete report, bundle, state and installed-scanner bytes are flushed from the open
+file descriptor before their staged inode is published. These guarantees assume a trusted parent
+directory and local account. PermitProbe is not a defense against another process with the same
+account privileges, a hostile output-directory owner, filesystem rollback, or a compromised kernel.
 
 ## Supply-chain boundary
 

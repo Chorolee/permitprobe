@@ -23,6 +23,7 @@ from overstep.models import Observation, TestCase, Variant
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from permitprobe.api import case_descriptor, execute_api_cases, finalize_api, prepare_api
+from permitprobe.artifacts import write_private_json
 from permitprobe.policy import API, ENV
 from permitprobe.report import Report
 from permitprobe.validation import ValidationLimiter
@@ -202,24 +203,25 @@ class StateWriter:
 
     def __init__(self, path: Path) -> None:
         self.path = path
-        descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
-            json.dump({"schema_version": 1, "status": "initializing"}, handle)
-            handle.write("\n")
+        write_private_json(path, {"schema_version": 1, "status": "initializing"})
 
     def write(self, payload: dict) -> None:
         descriptor, temporary = tempfile.mkstemp(
             prefix=".permitprobe-exploration-", dir=self.path.parent
         )
         try:
-            os.chmod(temporary, 0o600)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            os.fchmod(descriptor, 0o600)
+            handle = os.fdopen(descriptor, "w", encoding="utf-8")
+            descriptor = None
+            with handle:
                 json.dump(payload, handle, ensure_ascii=False, indent=2)
                 handle.write("\n")
                 handle.flush()
                 os.fsync(handle.fileno())
             os.replace(temporary, self.path)
         except Exception:
+            if descriptor is not None:
+                os.close(descriptor)
             try:
                 os.unlink(temporary)
             except OSError:
