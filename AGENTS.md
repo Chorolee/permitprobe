@@ -6,6 +6,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   1/new violation, 2/inconclusive.
 - Unknown outcomes and failed positive controls must never produce a clean run.
 - Reports contain labels and findings, not credentials, response bodies or scanned text.
+- Response-derived discovery labels remain reportable only through an explicit policy allowlist;
+  entropy or length must never be treated as a confidentiality boundary.
 - The library reuses Overstep and Gitleaks; do not silently widen their execution scope.
 - All fixtures are synthetic. Tests use loopback; never point tests at production.
 - Run `python -m pytest -q` and `ruff check src tests scripts` for behavior changes.
@@ -19,7 +21,12 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.
 - Known-finding baselines must keep failure checks visible, match exact code/target pairs,
-  and never turn incomplete evidence, handoff failures or latency failures into a clean run.
+  bind to the normalized target origin, and never turn incomplete evidence, discovery gaps,
+  handoff failures or latency failures into a clean run.
+- Response parsing, schema evaluation and ownership validation must share a fail-closed local
+  wall-clock budget; transport timeouts alone are insufficient.
 - One-shot scans may read only discovery sources fixed by the explicit policy contract. Extracted
   page links, redirects, robots entries and sitemap locations are sanitized proposals and must
   never become requests automatically.
+- Registry publication must verify downloaded asset digests and prove executable wheel/sdist
+  package bytes match the requested release tag.

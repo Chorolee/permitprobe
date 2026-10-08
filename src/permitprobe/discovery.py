@@ -2,9 +2,7 @@
 
 import asyncio
 import hashlib
-import math
 import re
-from collections import Counter
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urljoin, urlsplit
@@ -24,11 +22,6 @@ from permitprobe.report import Report
 
 _SAFE_METHODS = {"GET", "POST"}
 _NAVIGATION_RELS = {"alternate", "canonical", "next", "prev"}
-_UUID = re.compile(
-    r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[1-5][0-9A-Fa-f]{3}-"
-    r"[89ABab][0-9A-Fa-f]{3}-[0-9A-Fa-f]{12}"
-)
-_HEX = re.compile(r"[0-9A-Fa-f]{12,}")
 
 
 @dataclass(frozen=True)
@@ -120,31 +113,17 @@ def _normalized_template(path: str) -> str:
     return re.sub(r"\{[^{}]+\}", "{value}", path)
 
 
-def _entropy(value: str) -> float:
-    if not value:
-        return 0.0
-    frequencies = Counter(value).values()
-    return -sum(
-        (count / len(value)) * math.log2(count / len(value)) for count in frequencies
-    )
+def _literal_segments(path: str) -> set[str]:
+    return {segment for segment in path.split("/") if segment and "{" not in segment}
 
 
-def _shape_segment(segment: str) -> str:
-    token_like = (
-        segment.isdigit()
-        or bool(_UUID.fullmatch(segment))
-        or bool(_HEX.fullmatch(segment))
-        or len(segment) > 20
-        or (len(segment) >= 12 and _entropy(segment) >= 3.4)
-    )
-    return "{value}" if token_like else segment
-
-
-def _shape_path(path: str) -> str:
+def _shape_path(path: str, approved: set[str]) -> str:
     if path == "/":
         return path
     trailing = path.endswith("/")
-    shaped = "/".join(_shape_segment(part) for part in path.split("/")[1:] if part)
+    shaped = "/".join(
+        part if part in approved else "{value}" for part in path.split("/")[1:] if part
+    )
     return "/" + shaped + ("/" if trailing else "")
 
 
@@ -158,7 +137,13 @@ class _Candidates:
             (resource.name, resource.path, _template_regex(resource.path))
             for resource in [*config.resources, *config.public_resources]
         ]
-        self.items: dict[tuple[str, str, tuple[str, ...]], dict] = {}
+        self.report_path_literals = set(self.config.report_path_literals)
+        for _, path, _ in self.templates:
+            self.report_path_literals.update(_literal_segments(path))
+        self.report_query_names = set(self.config.report_query_names)
+        for resource in config.public_resources:
+            self.report_query_names.update(item.name for item in resource.query)
+        self.items: dict[tuple[str, str, tuple[str, ...], int], dict] = {}
         self.extracted = 0
         self.rejected = 0
         self.out_of_scope = 0
@@ -221,7 +206,6 @@ class _Candidates:
             len(pairs) > 16
             or len(query_names) > 16
             or any(not QUERY_NAME.fullmatch(name) for name in query_names)
-            or any(_shape_segment(name) == "{value}" for name in query_names)
         ):
             self.rejected += 1
             return None
@@ -236,10 +220,14 @@ class _Candidates:
         if normalized is None:
             return
         path, query_names = normalized
+        reported_query_names = tuple(
+            name for name in query_names if name in self.report_query_names
+        )
+        redacted_query_names = len(query_names) - len(reported_query_names)
         matches = sorted(name for name, _, pattern in self.templates if pattern.fullmatch(path))
         if reference.method != "GET":
             classification = "unsupported_method"
-            path_shape = _shape_path(path)
+            path_shape = _shape_path(path, self.report_path_literals)
         elif matches:
             classification = "declared"
             matched_paths = sorted(
@@ -248,8 +236,13 @@ class _Candidates:
             path_shape = _normalized_template(matched_paths[0])
         else:
             classification = "candidate"
-            path_shape = _shape_path(path)
-        key = (reference.method, path_shape, query_names)
+            path_shape = _shape_path(path, self.report_path_literals)
+        key = (
+            reference.method,
+            path_shape,
+            reported_query_names,
+            redacted_query_names,
+        )
         item = self.items.get(key)
         if item is None:
             if len(self.items) >= self.config.max_candidates:
@@ -258,11 +251,13 @@ class _Candidates:
             item = {
                 "method": reference.method,
                 "path_shape": path_shape,
-                "query_names": list(query_names),
+                "query_names": list(reported_query_names),
+                "redacted_query_names": redacted_query_names,
                 "classification": classification,
                 "policy_resources": matches,
                 "sources": [],
                 "executable": False,
+                "_variants": set(),
             }
             self.items[key] = item
         else:
@@ -271,17 +266,26 @@ class _Candidates:
                 item["classification"] = "candidate"
         if reference.source not in item["sources"]:
             item["sources"].append(reference.source)
+        item["_variants"].add((path, query_names))
 
     def proposals(self) -> list[dict]:
         result = []
         for key in sorted(self.items):
             item = self.items[key]
             item["sources"].sort(key=lambda source: tuple(sorted(source.items())))
-            identity = "\0".join([item["method"], item["path_shape"], *item["query_names"]])
+            identity = "\0".join(
+                [
+                    item["method"],
+                    item["path_shape"],
+                    *item["query_names"],
+                    str(item["redacted_query_names"]),
+                ]
+            )
             result.append(
                 {
                     "proposal_id": "ppd-" + hashlib.sha256(identity.encode()).hexdigest()[:16],
-                    **item,
+                    **{name: value for name, value in item.items() if name != "_variants"},
+                    "observed_variants": len(item["_variants"]),
                 }
             )
         return result
@@ -571,7 +575,11 @@ def discover(config: API, report: Report) -> None:
     proposals = candidates.proposals()
     undeclared = [item for item in proposals if item["classification"] == "candidate"]
     for item in undeclared:
-        query = "?" + "&".join(item["query_names"]) if item["query_names"] else ""
+        query_names = [
+            *item["query_names"],
+            *("{name}" for _ in range(item["redacted_query_names"])),
+        ]
+        query = "?" + "&".join(query_names) if query_names else ""
         report.add(
             "discovery.undeclared",
             "fail",

@@ -6,7 +6,7 @@ on:
       tag:
         description: Published GitHub release tag
         required: true
-        default: v0.2.0
+        default: v0.2.1
         type: string
       publish:
         description: Upload to PyPI (false validates the release without uploading)
@@ -27,6 +27,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/tags/${{ inputs.tag }}
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: '3.14'
@@ -40,7 +42,7 @@ jobs:
           python -c 'import os,re; assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+",os.environ["RELEASE_TAG"])'
           gh api "repos/Chorolee/permitprobe/releases/tags/$RELEASE_TAG" > release.json
           gh release download "$RELEASE_TAG" --repo Chorolee/permitprobe --dir dist --pattern 'permitprobe-*.whl' --pattern 'permitprobe-*.tar.gz'
-          python scripts/verify_release.py --metadata release.json --dist dist --tag "$RELEASE_TAG"
+          python scripts/verify_release.py --metadata release.json --dist dist --tag "$RELEASE_TAG" --source-root .
           python -m twine check --strict dist/*
       - name: Install the pinned handoff scanner
         run: python scripts/install_gitleaks.py

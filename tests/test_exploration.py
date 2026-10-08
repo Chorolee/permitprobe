@@ -121,10 +121,10 @@ def test_provider_feedback_finds_selective_owner_pair_without_direct_target_acce
 
 def test_swapping_ai_provider_keeps_execution_and_finding_semantics():
     results = []
-    for provider_name in ("astra-adapter", "local-model-adapter"):
-        provider = SelectiveProvider()
-        provider.name = provider_name
-        with read_server("selective-owner-leak") as (url, _), read_environment():
+    with read_server("selective-owner-leak") as (url, _), read_environment():
+        for provider_name in ("astra-adapter", "local-model-adapter"):
+            provider = SelectiveProvider()
+            provider.name = provider_name
             report = Report()
             explore_api(
                 Policy.model_validate(read_policy(url)).api,
@@ -133,15 +133,15 @@ def test_swapping_ai_provider_keeps_execution_and_finding_semantics():
                 max_rounds=1,
                 max_candidates_per_round=1,
             )
-        payload = report.to_dict()
-        results.append(
-            {
-                "evidence": payload["evidence"],
-                "findings": payload["findings"],
-                "coverage": payload["coverage"],
-                "accepted": payload["exploration"]["rounds"][0]["accepted"],
-            }
-        )
+            payload = report.to_dict()
+            results.append(
+                {
+                    "evidence": payload["evidence"],
+                    "findings": payload["findings"],
+                    "coverage": payload["coverage"],
+                    "accepted": payload["exploration"]["rounds"][0]["accepted"],
+                }
+            )
     assert results[0] == results[1]
 
 
@@ -345,6 +345,42 @@ def test_total_deadline_includes_provider_time_and_stops_before_candidate():
     assert report.exit_code == 2
     assert any(check.code == "exploration.deadline" for check in report.checks)
     assert report.to_dict()["exploration"]["stop_reason"] == "total_deadline"
+
+
+def test_total_deadline_includes_local_response_validation(monkeypatch):
+    data = example_policy()
+    data["api"]["validation_timeout_ms"] = 3_000
+    resource = data["api"]["resources"][0]
+    resource.update(
+        kind="function",
+        path="/expensive",
+        owner_param=None,
+        owner_attr=None,
+        identity_pointer=None,
+        allow=[{"role": "user", "scope": "any"}],
+        response_schema={"type": "string", "pattern": "^(a+)+$"},
+    )
+    config = Policy.model_validate(data).api
+
+    async def immediate_response(_url, headers, *_args, **_kwargs):
+        if headers.get("Authorization"):
+            return 200, json.dumps("a" * 34 + "!"), {}
+        return 403, '{"error":"denied"}', {}
+
+    monkeypatch.setattr(api_module, "fetch", immediate_response)
+    started = time.monotonic()
+    report = Report()
+    with demo_environment():
+        explore_api(
+            config,
+            report,
+            SelectiveProvider(empty=True),
+            max_seconds_total=1,
+        )
+    assert time.monotonic() - started < 1.5
+    assert report.exit_code == 2
+    assert report.to_dict()["exploration"]["stop_reason"] == "total_deadline"
+    assert any(check.code == "exploration.deadline" for check in report.checks)
 
 
 def test_last_delivery_crossing_deadline_stays_inconclusive(monkeypatch):

@@ -1,4 +1,3 @@
-import hashlib
 import json
 import threading
 from contextlib import contextmanager
@@ -98,6 +97,8 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
     secret_query = "synthetic-query-value-must-not-survive"
     secret_path = "A7f9Q2m8K4v6N3x1R5t0Z9y8"
     secret_cookie = "response-cookie-must-not-survive"
+    short_secret = "aB3dE5fG7h"
+    person_name = "jane-smith"
     monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:1")
     monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:1")
     monkeypatch.setenv("NO_PROXY", "")
@@ -110,6 +111,8 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
             <a href="/documents/alice?view=summary&token={secret_query}">declared</a>
             <a href="/admin?token={secret_query}">candidate</a>
             <a href="/reset/{secret_path}">sensitive path</a>
+            <a href="/reset/{short_secret}">short sensitive path</a>
+            <a href="/users/{person_name}">person path</a>
             <a href="https://outside.example.invalid/foreign">external</a>
             <form method="post" action="/admin/delete">write</form>
             """,
@@ -156,6 +159,8 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
     assert secret_query not in serialized
     assert secret_path not in serialized
     assert secret_cookie not in serialized
+    assert short_secret not in serialized
+    assert person_name not in serialized
     assert "outside.example.invalid" not in serialized
     assert payload["discovery"]["sources"] == {
         "configured": 3,
@@ -200,14 +205,19 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
         for item in proposals
     )
     assert any(
-        item["path_shape"] == "/reset/{value}" and item["classification"] == "candidate"
+        item["path_shape"] == "/{value}/{value}"
+        and item["classification"] == "candidate"
+        and item["observed_variants"] >= 3
         for item in proposals
     )
     assert any(
         item["method"] == "POST" and item["classification"] == "unsupported_method"
         for item in proposals
     )
-    assert any(item["query_names"] == ["token"] for item in proposals)
+    assert any(
+        item["query_names"] == [] and item["redacted_query_names"] == 1
+        for item in proposals
+    )
     assert any(check.code == "discovery.undeclared" for check in report.checks)
     assert report.exit_code == 1
 
@@ -276,6 +286,7 @@ def test_candidate_limit_is_inconclusive():
                 include_robots=False,
                 include_sitemap=False,
                 max_candidates=1,
+                report_path_literals=["one", "two"],
             ).api,
             report,
         )
@@ -295,7 +306,7 @@ def test_redirect_is_proposed_without_following():
             report,
         )
     assert [path for path, _ in requests] == ["/"]
-    assert report.discovery["candidates"]["proposals"][0]["path_shape"] == "/landing"
+    assert report.discovery["candidates"]["proposals"][0]["path_shape"] == "/{value}"
     assert report.exit_code == 1
 
 
@@ -377,6 +388,10 @@ def test_incomplete_handoff_blocks_discovery_and_declared_requests(tmp_path, cap
         {"timeout_seconds": 16},
         {"max_response_bytes": 1_001},
         {"max_candidates": 513},
+        {"report_path_literals": ["safe", "safe"]},
+        {"report_path_literals": ["unsafe/path"]},
+        {"report_query_names": ["safe", "safe"]},
+        {"report_query_names": ["bad name"]},
     ],
 )
 def test_discovery_contract_rejects_unsafe_or_unbounded_configuration(discovery):
@@ -386,18 +401,40 @@ def test_discovery_contract_rejects_unsafe_or_unbounded_configuration(discovery)
         Policy.model_validate(data)
 
 
-def test_absent_discovery_keeps_the_previous_api_digest():
-    api = Policy.model_validate(example_policy()).api
-    contract = api.model_dump(mode="json")
-    for operational in ("base_url", "timeout_seconds", "max_response_bytes", "max_cases"):
-        contract.pop(operational)
-    contract.pop("exploration_resources")
-    contract.pop("public_resources")
-    contract.pop("discovery")
-    expected = hashlib.sha256(
-        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    assert api_contract_digest(api) == expected
+def test_api_digest_binds_origin_but_not_operational_limits():
+    first = Policy.model_validate(example_policy("https://one.example.invalid")).api
+    same = Policy.model_validate(example_policy("https://ONE.example.invalid:443")).api
+    other = Policy.model_validate(example_policy("https://two.example.invalid")).api
+    tuned = Policy.model_validate(example_policy("https://one.example.invalid")).api
+    tuned.timeout_seconds = 30
+    tuned.validation_timeout_ms = 30_000
+    tuned.max_response_bytes = 2_000_000
+    tuned.max_cases = 512
+    assert api_contract_digest(first) == api_contract_digest(same)
+    assert api_contract_digest(first) == api_contract_digest(tuned)
+    assert api_contract_digest(first) != api_contract_digest(other)
+
+
+def test_only_policy_approved_discovery_labels_survive():
+    body = '<a href="/admin/jane-smith?mode=x&secretName=y">candidate</a>'
+    with discovery_server({"/": (200, "text/html", body, {})}) as (url, _):
+        report = Report()
+        discover(
+            policy_with_discovery(
+                url,
+                include_robots=False,
+                include_sitemap=False,
+                report_path_literals=["admin"],
+                report_query_names=["mode"],
+            ).api,
+            report,
+        )
+    proposal = report.discovery["candidates"]["proposals"][0]
+    assert proposal["path_shape"] == "/admin/{value}"
+    assert proposal["query_names"] == ["mode"]
+    assert proposal["redacted_query_names"] == 1
+    assert "jane-smith" not in json.dumps(report.to_dict())
+    assert "secretName" not in json.dumps(report.to_dict())
 
 
 def test_published_discovery_example_is_valid():

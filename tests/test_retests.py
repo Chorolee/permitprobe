@@ -12,20 +12,24 @@ from permitprobe.report import Report
 from permitprobe.retest import load_prior_report, run_retest
 
 
-def prior_selective_finding():
-    with read_server("selective-owner-leak") as (url, _), read_environment():
-        report = Report()
-        check_api(Policy.model_validate(read_policy(url)).api, report)
+def prior_selective_finding(url=None):
+    if url is None:
+        with read_server("selective-owner-leak") as (server_url, _), read_environment():
+            return prior_selective_finding(server_url)
+    report = Report()
+    check_api(Policy.model_validate(read_policy(url)).api, report)
     payload = report.to_dict()
     finding = next(item for item in payload["findings"] if item["code"] == "api.BOLA")
     assert finding["evidence_ids"]
     return payload, finding["finding_id"]
 
 
-def prior_collection_finding():
-    with read_server("collection-leak") as (url, _), read_environment():
-        report = Report()
-        check_api(Policy.model_validate(read_policy(url)).api, report)
+def prior_collection_finding(url=None):
+    if url is None:
+        with read_server("collection-leak") as (server_url, _), read_environment():
+            return prior_collection_finding(server_url)
+    report = Report()
+    check_api(Policy.model_validate(read_policy(url)).api, report)
     payload = report.to_dict()
     finding = next(
         item for item in payload["findings"] if item["code"] == "data.collection_items"
@@ -35,43 +39,47 @@ def prior_collection_finding():
 
 
 def test_retest_reproduced_then_not_reproduced_or_fixed_with_explicit_change():
-    prior, finding_id = prior_selective_finding()
     with read_server("selective-owner-leak") as (url, requests), read_environment():
+        prior, finding_id = prior_selective_finding(url)
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api, prior, finding_id
         )
-    assert verdict == "reproduced"
-    assert len(requests) == 4
-    assert result["report"]["coverage"] == {
-        "planned": 4,
-        "observed": 4,
-        "unprobed": [],
-    }
+        assert verdict == "reproduced"
+        assert len(requests) == 4
+        assert result["report"]["coverage"] == {
+            "planned": 4,
+            "observed": 4,
+            "unprobed": [],
+        }
 
-    with read_server("safe") as (url, requests), read_environment():
+        requests.active_scenario = "safe"
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api, prior, finding_id
         )
-    assert verdict == "not_reproduced"
-    assert len(requests) == 4
-    assert result["report"]["exit_code"] == 0
+        assert verdict == "not_reproduced"
+        assert len(requests) == 4
+        assert result["report"]["exit_code"] == 0
 
-    with read_server("safe") as (url, _), read_environment():
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api,
             prior,
             finding_id,
             change_ref="deploy:fix-123",
         )
-    assert verdict == "fixed"
-    assert result["change_ref"] == "deploy:fix-123"
-    serialized = json.dumps(result)
-    assert not any(value in serialized for value in COOKIES.values())
+        assert verdict == "fixed"
+        assert result["change_ref"] == "deploy:fix-123"
+        serialized = json.dumps(result)
+        assert not any(value in serialized for value in COOKIES.values())
 
 
 def test_retest_missing_credential_and_policy_change_are_inconclusive(monkeypatch):
-    prior, finding_id = prior_selective_finding()
-    with read_server("safe") as (url, requests), read_environment():
+    with read_server("selective-owner-leak") as (url, requests), read_environment():
+        prior, finding_id = prior_selective_finding(url)
+        requests.active_scenario = "safe"
+        requests.clear()
         monkeypatch.delenv("PP_BOB_COOKIE")
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api,
@@ -79,11 +87,14 @@ def test_retest_missing_credential_and_policy_change_are_inconclusive(monkeypatc
             finding_id,
             change_ref="deploy:fix-123",
         )
-    assert verdict == "inconclusive"
-    assert not requests
-    assert result["report"]["exit_code"] == 2
+        assert verdict == "inconclusive"
+        assert not requests
+        assert result["report"]["exit_code"] == 2
 
-    with read_server("safe") as (url, requests), read_environment():
+    with read_server("selective-owner-leak") as (url, requests), read_environment():
+        prior, finding_id = prior_selective_finding(url)
+        requests.active_scenario = "safe"
+        requests.clear()
         policy = read_policy(url)
         policy["api"]["probe_victims"] = "one"
         verdict, result = run_retest(
@@ -92,16 +103,20 @@ def test_retest_missing_credential_and_policy_change_are_inconclusive(monkeypatc
             finding_id,
             change_ref="deploy:fix-123",
         )
-    assert verdict == "inconclusive"
-    assert not requests
-    assert any(check["code"] == "retest.policy" for check in result["report"]["checks"])
+        assert verdict == "inconclusive"
+        assert not requests
+        assert any(
+            check["code"] == "retest.policy" for check in result["report"]["checks"]
+        )
 
 
 def test_retest_cli_writes_append_only_result(tmp_path, capsys):
-    prior, finding_id = prior_selective_finding()
-    prior_path = tmp_path / "prior.json"
-    prior_path.write_text(json.dumps(prior))
-    with read_server("safe") as (url, requests), read_environment():
+    with read_server("selective-owner-leak") as (url, requests), read_environment():
+        prior, finding_id = prior_selective_finding(url)
+        prior_path = tmp_path / "prior.json"
+        prior_path.write_text(json.dumps(prior))
+        requests.active_scenario = "safe"
+        requests.clear()
         policy = tmp_path / "policy.json"
         policy.write_text(json.dumps(read_policy(url)))
         output = tmp_path / "retest.json"
@@ -128,8 +143,9 @@ def test_retest_cli_writes_append_only_result(tmp_path, capsys):
 
 
 def test_grouped_collection_retest_adds_independent_authentication_controls():
-    prior, finding_id = prior_collection_finding()
     with read_server("collection-leak") as (url, requests), read_environment():
+        prior, finding_id = prior_collection_finding(url)
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api, prior, finding_id
         )
@@ -148,34 +164,34 @@ def test_grouped_collection_retest_adds_independent_authentication_controls():
 
 
 def test_anonymous_finding_cannot_be_fixed_without_same_endpoint_control(monkeypatch):
-    prior, _ = prior_selective_finding()
-    anonymous = next(
-        item
-        for item in prior["evidence"]
-        if item["resource"] == "requests" and item["subject"] == "anon"
-    )
-    synthetic = Report(policy_digest=prior["policy_digest"])
-    synthetic.add(
-        "api.BFLA",
-        "fail",
-        "requests/anon/na",
-        "Synthetic retained authorization finding.",
-        anonymous["evidence_id"],
-    )
-    prior["findings"] = synthetic.finding_groups()
-    prior["checks"] = synthetic.to_dict()["checks"]
-    calls = []
+    with read_server("selective-owner-leak") as (url, _), read_environment():
+        prior, _ = prior_selective_finding(url)
+        anonymous = next(
+            item
+            for item in prior["evidence"]
+            if item["resource"] == "requests" and item["subject"] == "anon"
+        )
+        synthetic = Report(policy_digest=prior["policy_digest"])
+        synthetic.add(
+            "api.BFLA",
+            "fail",
+            "requests/anon/na",
+            "Synthetic retained authorization finding.",
+            anonymous["evidence_id"],
+        )
+        prior["findings"] = synthetic.finding_groups()
+        prior["checks"] = synthetic.to_dict()["checks"]
+        calls = []
 
-    async def unavailable_endpoint(
-        url, headers, config, redirect_status=None, timeout_seconds=None
-    ):
-        calls.append(headers.get("Cookie"))
-        return 403, '{"error":"denied"}', {}
+        async def unavailable_endpoint(
+            _url, headers, config, redirect_status=None, timeout_seconds=None
+        ):
+            calls.append(headers.get("Cookie"))
+            return 403, '{"error":"denied"}', {}
 
-    monkeypatch.setattr(api_module, "fetch", unavailable_endpoint)
-    with read_environment():
+        monkeypatch.setattr(api_module, "fetch", unavailable_endpoint)
         verdict, result = run_retest(
-            Policy.model_validate(read_policy()).api,
+            Policy.model_validate(read_policy(url)).api,
             prior,
             prior["findings"][0]["finding_id"],
             change_ref="deploy:fix",
@@ -213,16 +229,16 @@ def test_exploration_finding_uses_same_catalog_and_digest_for_retest():
                 "done_hint": True,
             }
 
-    with read_server("selective-owner-leak") as (url, _), read_environment():
+    with read_server("selective-owner-leak") as (url, requests), read_environment():
         original = Report()
         policy = Policy.model_validate(read_policy(url)).api
         explore_api(policy, original, Provider(), max_rounds=1, max_candidates_per_round=1)
-    prior = original.to_dict()
-    finding_id = next(
-        item["finding_id"] for item in prior["findings"] if item["code"] == "api.BOLA"
-    )
-
-    with read_server("safe") as (url, requests), read_environment():
+        prior = original.to_dict()
+        finding_id = next(
+            item["finding_id"] for item in prior["findings"] if item["code"] == "api.BOLA"
+        )
+        requests.active_scenario = "safe"
+        requests.clear()
         verdict, result = run_retest(
             Policy.model_validate(read_policy(url)).api,
             prior,
@@ -231,6 +247,33 @@ def test_exploration_finding_uses_same_catalog_and_digest_for_retest():
     assert verdict == "not_reproduced"
     assert len(requests) == 4
     assert not any(
+        check["code"] == "retest.policy" for check in result["report"]["checks"]
+    )
+
+
+def test_retest_refuses_a_different_target_before_delivery():
+    prior, finding_id = prior_selective_finding()
+    calls = []
+
+    async def unexpected_fetch(*args, **kwargs):
+        calls.append((args, kwargs))
+        raise AssertionError("different target must not be contacted")
+
+    with read_server("safe") as (url, _), read_environment():
+        original_fetch = api_module.fetch
+        api_module.fetch = unexpected_fetch
+        try:
+            verdict, result = run_retest(
+                Policy.model_validate(read_policy(url)).api,
+                prior,
+                finding_id,
+                change_ref="deploy:wrong-target",
+            )
+        finally:
+            api_module.fetch = original_fetch
+    assert verdict == "inconclusive"
+    assert calls == []
+    assert any(
         check["code"] == "retest.policy" for check in result["report"]["checks"]
     )
 

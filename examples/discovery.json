@@ -10,6 +10,13 @@
       ],
       "include_robots": true,
       "include_sitemap": true,
+      "report_path_literals": [
+        "admin",
+        "login"
+      ],
+      "report_query_names": [
+        "page"
+      ],
       "max_candidates": 128,
       "max_response_bytes": 262144,
       "timeout_seconds": 5
