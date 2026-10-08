@@ -289,6 +289,35 @@ def test_public_only_inventory_is_supported(tmp_path):
     assert report.exit_code == 0, report.to_dict()
 
 
+def test_inventory_includes_only_same_origin_linked_routes(tmp_path):
+    policy = inventory_policy()
+    policy["api"]["linked_resources"] = [
+        {
+            "name": "direct-documents",
+            "source_resource": "documents",
+            "origin": "https://objects.example.invalid",
+            "path": "/objects/{id}",
+        }
+    ]
+    _, openapi_path = write_inputs(tmp_path, policy, openapi_document())
+    cross_origin = Report()
+    inventory_openapi(Policy.model_validate(policy).api, openapi_path, cross_origin)
+    assert cross_origin.exit_code == 0, cross_origin.to_dict()
+    assert cross_origin.inventory["declared_check_resources"] == 2
+
+    policy["api"]["linked_resources"][0]["origin"] = policy["api"]["base_url"]
+    document = openapi_document()
+    document["paths"]["/objects/{objectId}"] = {
+        "get": {"responses": {"200": {"description": "synthetic"}}}
+    }
+    openapi_path.write_text(json.dumps(document))
+    same_origin = Report()
+    inventory_openapi(Policy.model_validate(policy).api, openapi_path, same_origin)
+    assert same_origin.exit_code == 0, same_origin.to_dict()
+    assert same_origin.inventory["declared_check_resources"] == 3
+    assert same_origin.inventory["covered_get_operations"] == 3
+
+
 def test_published_openapi_example_matches_the_starter_policy():
     from pathlib import Path
 

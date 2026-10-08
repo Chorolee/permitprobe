@@ -64,6 +64,7 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
             "openapi_inventory": {"configured": True, "status": "pass"},
             "passive_discovery": {"configured": False, "status": "skipped"},
             "live_get_checks": {"configured": True, "status": "pass"},
+            "linked_reads": {"configured": False, "status": "skipped"},
             "handoff": {"configured": True, "status": "pass"},
             "known_finding_baseline": {"configured": False, "status": "skipped"},
         },
@@ -80,6 +81,9 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
             "proposal_discovery": False,
             "discovered_requests_executed": 0,
             "redirects_followed": False,
+            "linked_read_contracts": 0,
+            "linked_credentials_forwarded": False,
+            "linked_response_bodies_consumed": False,
         },
     }
 

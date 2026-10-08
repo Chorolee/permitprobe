@@ -16,7 +16,13 @@ from permitprobe.api import (
     finalize_api,
     prepare_api,
 )
-from permitprobe.policy import API, PolicyError
+from permitprobe.linked import (
+    execute_linked_cases,
+    linked_case_descriptor,
+    prepare_linked,
+    source_control_cases,
+)
+from permitprobe.policy import API, PolicyError, api_contract_digest
 from permitprobe.public_contracts import (
     execute_public_cases,
     prepare_public,
@@ -239,14 +245,64 @@ def run_retest(
     is_public = bool(finding_evidence) and all(
         item.startswith("ppc-") for item in finding_evidence
     )
-    if any(item.startswith("ppc-") for item in finding_evidence) and not is_public:
+    is_linked = bool(finding_evidence) and all(
+        item.startswith("ppl-") for item in finding_evidence
+    )
+    if any(
+        item.startswith(("ppc-", "ppl-")) for item in finding_evidence
+    ) and not (is_public or is_linked):
         raise PolicyError("finding mixes incompatible evidence types")
 
     selected = []
-    if is_public:
+    verdict: RetestVerdict
+    if is_linked:
+        current_digest = api_contract_digest(config)
+        report.policy_digest = current_digest
+        if prior["policy_digest"] != current_digest:
+            report.add(
+                "retest.policy",
+                "inconclusive",
+                "retest",
+                "The current policy differs from the finding's original policy.",
+            )
+            verdict = "inconclusive"
+        else:
+            prepared = prepare_api(config, report)
+            prepared_linked = (
+                prepare_linked(config, prepared, report)
+                if prepared is not None and config.linked_resources
+                else None
+            )
+            if prepared is None or prepared_linked is None:
+                verdict = "inconclusive"
+            else:
+                by_id = {case.id: case for case in prepared_linked.cases}
+                try:
+                    linked_cases = [by_id[item] for item in finding_evidence]
+                except KeyError:
+                    raise PolicyError(
+                        "finding evidence is not present in the current policy"
+                    ) from None
+                controls = source_control_cases(prepared, linked_cases)
+                selected = [*controls, *linked_cases]
+                report.planned_cases = {
+                    **{case.id: case_descriptor(case) for case in controls},
+                    **{case.id: linked_case_descriptor(case) for case in linked_cases},
+                }
+                observations = execute_api_cases(prepared, controls, report)
+                finalize_api(
+                    prepared,
+                    controls,
+                    observations,
+                    report,
+                    require_full_coverage=False,
+                )
+                execute_linked_cases(prepared_linked, linked_cases, report)
+                verdict = "inconclusive"
+    elif is_public:
         prepared_public = prepare_public(config, report) if config.public_resources else None
         if prepared_public is None:
-            verdict: RetestVerdict = "inconclusive"
+            verdict = "inconclusive"
         elif prior["policy_digest"] != report.policy_digest:
             report.add(
                 "retest.policy",
@@ -282,11 +338,13 @@ def run_retest(
             execute_public_cases(prepared_public, selected, report)
             verdict = "inconclusive"
     else:
+        exploration_retest = prior.get("exploration") is not None
         prepared = prepare_api(
             config,
             report,
-            include_exploration=prior.get("exploration") is not None,
-            include_public=prior.get("exploration") is None,
+            include_exploration=exploration_retest,
+            include_public=not exploration_retest,
+            include_linked=not exploration_retest,
         )
         if prepared is None:
             verdict = "inconclusive"

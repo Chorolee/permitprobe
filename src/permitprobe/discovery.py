@@ -133,9 +133,15 @@ class _Candidates:
         self.config = config.discovery
         self.base_url = config.base_url.rstrip("/")
         self.origin = origin_key(config.base_url)
+        declared = [*config.resources, *config.public_resources]
+        declared.extend(
+            resource
+            for resource in config.linked_resources
+            if origin_key(resource.origin) == self.origin
+        )
         self.templates = [
             (resource.name, resource.path, _template_regex(resource.path))
-            for resource in [*config.resources, *config.public_resources]
+            for resource in declared
         ]
         self.report_path_literals = set(self.config.report_path_literals)
         for _, path, _ in self.templates:

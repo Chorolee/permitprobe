@@ -23,6 +23,14 @@
           "title": "Resources",
           "type": "array"
         },
+        "linked_resources": {
+          "items": {
+            "$ref": "#/$defs/LinkedResource"
+          },
+          "maxItems": 32,
+          "title": "Linked Resources",
+          "type": "array"
+        },
         "public_resources": {
           "items": {
             "$ref": "#/$defs/PublicResource"
@@ -306,6 +314,56 @@
         "allow"
       ],
       "title": "Handoff",
+      "type": "object"
+    },
+    "LinkedResource": {
+      "additionalProperties": false,
+      "description": "Anonymous direct-read check tied to a protected source object.",
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Name",
+          "type": "string"
+        },
+        "source_resource": {
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+          "title": "Source Resource",
+          "type": "string"
+        },
+        "origin": {
+          "maxLength": 512,
+          "title": "Origin",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "denial_statuses": {
+          "items": {
+            "enum": [
+              401,
+              403,
+              404,
+              410
+            ],
+            "type": "integer"
+          },
+          "maxItems": 4,
+          "minItems": 1,
+          "title": "Denial Statuses",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "source_resource",
+        "origin",
+        "path"
+      ],
+      "title": "LinkedResource",
       "type": "object"
     },
     "PublicResource": {

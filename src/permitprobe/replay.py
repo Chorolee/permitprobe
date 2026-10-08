@@ -252,6 +252,7 @@ def run_replay(config: API, manifest: ReplayManifest, report: Report) -> None:
         config,
         include_exploration=True,
         include_public=False,
+        include_linked=False,
     )
     report.policy_digest = current_digest
     report.replay = {
@@ -277,6 +278,7 @@ def run_replay(config: API, manifest: ReplayManifest, report: Report) -> None:
         report,
         include_exploration=True,
         include_public=False,
+        include_linked=False,
     )
     if prepared is None:
         report.replay["delivery"] = "precheck"

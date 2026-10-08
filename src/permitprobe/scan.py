@@ -81,6 +81,14 @@ def run_scan(
                     True,
                 ),
             },
+            "linked_reads": {
+                "configured": bool(policy.api.linked_resources),
+                "status": _stage_status(
+                    report,
+                    ("linked.",),
+                    bool(policy.api.linked_resources),
+                ),
+            },
             "handoff": {
                 "configured": policy.handoff is not None,
                 "status": _stage_status(report, ("handoff.",), policy.handoff is not None),
@@ -113,5 +121,8 @@ def run_scan(
             "proposal_discovery": policy.api.discovery is not None,
             "discovered_requests_executed": 0,
             "redirects_followed": False,
+            "linked_read_contracts": len(policy.api.linked_resources),
+            "linked_credentials_forwarded": False,
+            "linked_response_bodies_consumed": False,
         },
     }

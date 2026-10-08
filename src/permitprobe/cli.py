@@ -11,6 +11,8 @@ from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
 from permitprobe.exploration import ExternalProvider, StateWriter, explore_api
 from permitprobe.handoff import check_handoff, write_bundle
+from permitprobe.linked_demo import SCENARIOS as LINKED_SCENARIOS
+from permitprobe.linked_demo import run_linked_demo
 from permitprobe.openapi_inventory import inventory_openapi
 from permitprobe.policy import Policy, PolicyError, api_contract_digest, load_policy
 from permitprobe.read_demo import SCENARIOS, run_read_demo
@@ -136,6 +138,12 @@ def parser() -> argparse.ArgumentParser:
     reads.add_argument("--scenario", choices=SCENARIOS, default="safe")
     reads.add_argument("--format", choices=("text", "json"), default="text")
     reads.add_argument("--report")
+    linked = commands.add_parser(
+        "demo-linked", help="Run synthetic linked API/storage read cases"
+    )
+    linked.add_argument("--scenario", choices=LINKED_SCENARIOS, default="safe")
+    linked.add_argument("--format", choices=("text", "json"), default="text")
+    linked.add_argument("--report")
     explore = commands.add_parser(
         "explore", help="Run bounded active exploration through a model-neutral provider"
     )
@@ -241,6 +249,8 @@ def main(argv: list[str] | None = None) -> int:
             return emit(run_collection_demo(args.scenario), args.format, args.report)
         if args.command == "demo-read-paths":
             return emit(run_read_demo(args.scenario), args.format, args.report)
+        if args.command == "demo-linked":
+            return emit(run_linked_demo(args.scenario), args.format, args.report)
         if args.command == "baseline":
             previous = Baseline.load(args.previous) if args.previous else None
             baseline, summary = build_baseline(load_prior_report(args.report), previous)

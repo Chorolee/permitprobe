@@ -437,6 +437,31 @@ def test_only_policy_approved_discovery_labels_survive():
     assert "secretName" not in json.dumps(report.to_dict())
 
 
+def test_same_origin_linked_route_is_a_declared_discovery_template():
+    body = '<a href="/objects/alice">linked</a>'
+    with discovery_server({"/": (200, "text/html", body, {})}) as (url, _):
+        data = example_policy(url)
+        data["api"]["linked_resources"] = [
+            {
+                "name": "direct-documents",
+                "source_resource": "documents",
+                "origin": url,
+                "path": "/objects/{id}",
+            }
+        ]
+        data["api"]["discovery"] = {
+            "seed_paths": ["/"],
+            "include_robots": False,
+            "include_sitemap": False,
+        }
+        report = Report()
+        discover(Policy.model_validate(data).api, report)
+    proposal = report.discovery["candidates"]["proposals"][0]
+    assert proposal["classification"] == "declared"
+    assert proposal["policy_resources"] == ["direct-documents"]
+    assert proposal["path_shape"] == "/objects/{value}"
+
+
 def test_published_discovery_example_is_valid():
     root = Path(__file__).resolve().parents[1]
     policy = Policy.model_validate_json((root / "examples/discovery.json").read_text())

@@ -11,6 +11,10 @@ while it is in the `0.x` development series.
   only the target-bound policy digest, source-report digest and normalized case IDs. The manifest
   reruns the exact deterministic baseline and completed exploration cases without invoking an AI
   provider or storing URLs, credentials, headers or response bodies.
+- Linked API/storage read contracts anonymously probe a pinned direct-object origin after the
+  protected source API establishes each seeded object. Primary credentials are never forwarded,
+  response bodies are never consumed, redirects are never followed, and a denial cannot pass when
+  its source positive control failed.
 
 ## [0.2.1] - 2026-10-08
 

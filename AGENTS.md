@@ -33,3 +33,6 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Replay manifests may contain only digests and normalized case IDs. Replay must bind to the same
   target origin, require the exact deterministic baseline, revalidate every ID against the current
   policy catalogue, invoke no provider, and preserve the GET-only zero-write boundary.
+- Linked read checks must use an explicitly pinned origin and a protected source-object control.
+  Never forward primary credentials, follow redirects, consume linked response bodies, or call a
+  linked denial safe when the corresponding source object was not established.
