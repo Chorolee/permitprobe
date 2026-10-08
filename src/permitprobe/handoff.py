@@ -10,6 +10,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import unicodedata
 import zipfile
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
@@ -41,6 +42,27 @@ PRIVATE_DIRS = {".git", ".ssh", ".aws", ".azure", ".kube", ".memory", ".venv"}
 PRIVATE_FILES = {".gitleaks.toml", ".gitleaksignore", "credentials", "id_rsa", "id_ed25519"}
 
 
+def _portable_path_key(name: str) -> str:
+    return unicodedata.normalize("NFC", name).casefold()
+
+
+def _canonical_handoff_path(name: str) -> bool:
+    if not isinstance(name, str):
+        return False
+    path = PurePosixPath(name)
+    return not (
+        path.is_absolute()
+        or not path.parts
+        or ".." in path.parts
+        or "\\" in name
+        or str(path) != name
+        or name.endswith("/")
+        or ":" in name
+        or any(not char.isprintable() for char in name)
+        or any(part.endswith((".", " ")) for part in path.parts)
+    )
+
+
 def _denied(name: str, policy: Handoff) -> bool:
     parts = PurePosixPath(name).parts
     lowered = [p.lower() for p in parts]
@@ -53,7 +75,7 @@ def _denied(name: str, policy: Handoff) -> bool:
         or leaf.endswith(".env")
         or leaf in PRIVATE_FILES
         or leaf.endswith((".pem", ".key", ".p12", ".pfx"))
-        or name == RECEIPT_NAME
+        or _portable_path_key(name) == _portable_path_key(RECEIPT_NAME)
     ):
         return True
     return not any(fnmatch.fnmatchcase(name, p) for p in policy.allow) or any(
@@ -95,20 +117,27 @@ def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, byte
         report.add("handoff.root", "inconclusive", "handoff", "Cannot open handoff directory.")
         return snapshot
     try:
+        portable_names = {_portable_path_key(RECEIPT_NAME)}
         for name in policy.files:
-            path = PurePosixPath(name)
-            if (
-                path.is_absolute()
-                or not path.parts
-                or ".." in path.parts
-                or "\\" in name
-                or str(path) != name
-                or name.endswith("/")
-                or ":" in name
-                or any(p.endswith((".", " ")) for p in path.parts)
-            ):
-                report.add("handoff.path", "fail", "handoff", "Non-canonical relative file path.")
+            if not _canonical_handoff_path(name):
+                report.add(
+                    "handoff.path",
+                    "fail",
+                    "handoff",
+                    "Non-canonical or non-portable relative file path.",
+                )
                 continue
+            portable = _portable_path_key(name)
+            if portable in portable_names:
+                report.add(
+                    "handoff.path",
+                    "fail",
+                    "handoff",
+                    "Non-canonical or non-portable relative file path.",
+                )
+                continue
+            portable_names.add(portable)
+            path = PurePosixPath(name)
             if _denied(name, policy):
                 report.add(
                     "handoff.policy", "fail", name, "File is outside the declared handoff boundary."
@@ -315,6 +344,14 @@ def check_handoff(
 
 
 def write_bundle(snapshot: dict[str, bytes], destination: Path) -> None:
+    portable_names = {_portable_path_key(RECEIPT_NAME)}
+    for name in snapshot:
+        if not _canonical_handoff_path(name):
+            raise ValueError("bundle paths must be canonical and portable")
+        portable = _portable_path_key(name)
+        if portable in portable_names:
+            raise ValueError("bundle paths must be canonical and portable")
+        portable_names.add(portable)
     manifest = {
         "schema_version": 1,
         "scope": "Exact text bytes checked by PermitProbe; not an authorization to send.",

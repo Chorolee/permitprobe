@@ -304,6 +304,27 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
 
 
 @pytest.mark.parametrize(
+    "names",
+    [
+        ("Review.txt", "review.txt"),
+        ("caf\N{LATIN SMALL LETTER E WITH ACUTE}.txt", "cafe\N{COMBINING ACUTE ACCENT}.txt"),
+        (RECEIPT_NAME.lower(),),
+    ],
+)
+def test_portable_archive_path_collisions_are_rejected(names, tmp_path):
+    for name in names:
+        (tmp_path / name).write_text("Synthetic review.\n")
+    report = Report()
+    snapshot = collect(handoff(list(names)), tmp_path, report)
+    assert len(snapshot) < len(names)
+    assert report.exit_code == 1
+    output = tmp_path / "ambiguous.zip"
+    with pytest.raises(ValueError, match="canonical and portable"):
+        write_bundle({name: b"synthetic" for name in names}, output)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
     "name",
     [
         ".env",
@@ -323,6 +344,7 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
         "C:/review.txt",
         ".. /review.txt",
         "folder./review.txt",
+        "review\N{RIGHT-TO-LEFT OVERRIDE}.txt",
     ],
 )
 def test_private_paths_cannot_be_widened_by_allow_glob(name, tmp_path):
