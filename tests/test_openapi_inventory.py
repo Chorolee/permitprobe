@@ -233,6 +233,12 @@ def test_operation_parameter_overrides_path_parameter(tmp_path):
             }
         ),
         lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={
+                "type": "openIdConnect",
+                "openIdConnectUrl": "https://identity.example.invalid:/openid",
+            }
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
             bearerAuth={"type": "oauth2", "flows": {"unknownFlow": {}}}
         ),
         lambda document: document["components"]["securitySchemes"].update(

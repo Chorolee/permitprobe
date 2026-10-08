@@ -146,6 +146,9 @@ def _https_url(value) -> bool:
         and parsed.username is None
         and parsed.password is None
         and not parsed.fragment
+        and "#" not in value
+        and "%" not in parsed.netloc
+        and not parsed.netloc.endswith(":")
         and port != 0
     )
 
