@@ -837,6 +837,14 @@ def test_public_contract_rejects_unsafe_request_shapes(change):
         Policy.model_validate(data)
 
 
+def test_public_contract_rejects_ignored_format_assertion():
+    data = public_policy()
+    schema = data["api"]["public_resources"][0]["response_schema"]
+    schema["properties"]["state"]["format"] = "uri"
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "change",
     [
