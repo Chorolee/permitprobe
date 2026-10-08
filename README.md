@@ -16,6 +16,7 @@ PermitProbe helps service operators validate:
 - unexpected API response fields
 - public-route response, cache, and fail-fast boundaries
 - OpenAPI GET-operation coverage against executable checks
+- reviewed known findings versus new regressions
 - secrets included in AI handoff files
 
 It is designed exclusively for systems the operator owns or is authorized to test.
@@ -387,6 +388,45 @@ one run alone is not called a fix. A prior report is rejected unless its checks 
 grouped findings exactly, so swapping a finding's evidence IDs cannot redirect the retest to
 benign cases. Prior reports remain unchanged and every retest carries its own lineage graph.
 
+## Known-finding baselines (unreleased; source checkout)
+
+A reviewed baseline lets CI distinguish accepted findings from new regressions while keeping
+every failed check and grouped finding in the report. First create a normal report, review its
+failures, and explicitly capture them:
+
+```sh
+permitprobe check my-security-checks/permitprobe.json --report first-run.json
+permitprobe baseline first-run.json --output permitprobe-baseline.json
+```
+
+Apply the committed baseline to later deterministic checks or OpenAPI inventories:
+
+```sh
+permitprobe check my-security-checks/permitprobe.json \
+  --baseline permitprobe-baseline.json --report current.json
+```
+
+When every failure matches the same policy digest plus exact check code and target, the report
+status is `known_findings` and the command exits `0`. The failed checks remain visible. A new
+target or check exits `1`; any incomplete evidence still exits `2`.
+
+Baseline files are strict, bounded JSON. Each entry has a derived ID, `first_seen`, `last_seen`,
+and optional `expires`. The expiry date remains active through that date and resurfaces on the
+following day. Extra annotations such as `reason` or `ticket` are preserved but have no runtime
+meaning. Do not put credentials or private response data in annotations.
+
+Create an updated file rather than mutating one in place:
+
+```sh
+permitprobe baseline latest-run.json \
+  --previous permitprobe-baseline.json --output permitprobe-baseline.next.json
+```
+
+An update adds newly reviewed failures and refreshes observed entries while carrying unobserved
+entries forward. It never prunes an entry or calls an unobserved finding fixed. Latency findings
+and AI-handoff failures cannot be recorded in a baseline. One entry identifies a normalized
+code/target pair, so separate root causes that produce the same pair remain a documented limit.
+
 ## Check and package an AI handoff
 
 ```sh
@@ -418,7 +458,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, offline OpenAPI-to-policy GET inventory, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
+| PermitProbe | Strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -440,7 +480,7 @@ has its own behavior and scope.
 
 | Exit | Meaning |
 | --- | --- |
-| `0` | Every configured check completed and passed |
+| `0` | Every configured check passed, or every failure exactly matched an applied baseline and remains reported as `known_findings` |
 | `1` | At least one policy violation; no incomplete checks |
 | `2` | Configuration error or incomplete evidence; failures may also be present |
 
@@ -449,6 +489,8 @@ a local report file. Schema version 2 includes normalized evidence IDs, owner al
 coverage and grouped findings. Public-contract evidence also records elapsed milliseconds.
 Reports still omit credential and request-header values, response bodies, query values,
 redirect destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
+Applied baseline summaries list known, new, unobserved and expired entry IDs without removing
+the underlying failure checks.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. Declared redirect responses are checked from their headers only.

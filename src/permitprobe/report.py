@@ -42,6 +42,8 @@ class Report:
     evidence: dict[str, Evidence] = field(default_factory=dict)
     exploration: dict | None = None
     inventory: dict | None = None
+    baseline: dict | None = None
+    _known_failure_keys: set[tuple[str, str]] = field(default_factory=set, repr=False)
 
     def add(
         self,
@@ -99,14 +101,18 @@ class Report:
             or any(c.outcome == "inconclusive" for c in self.checks)
         ):
             return 2
-        return 1 if any(c.outcome == "fail" for c in self.checks) else 0
+        failures = {(check.code, check.target) for check in self.checks if check.outcome == "fail"}
+        return 1 if failures - self._known_failure_keys else 0
 
     def to_dict(self) -> dict:
         observed = set(self.evidence)
         planned = set(self.planned_cases)
+        status = {0: "pass", 1: "fail", 2: "inconclusive"}[self.exit_code]
+        if self.exit_code == 0 and any(check.outcome == "fail" for check in self.checks):
+            status = "known_findings"
         return {
             "schema_version": 2,
-            "status": {0: "pass", 1: "fail", 2: "inconclusive"}[self.exit_code],
+            "status": status,
             "exit_code": self.exit_code,
             "policy_digest": self.policy_digest,
             "configured_surfaces": self.configured,
@@ -127,5 +133,6 @@ class Report:
             "findings": self.finding_groups(),
             "exploration": self.exploration,
             "inventory": self.inventory,
+            "baseline": self.baseline,
             "checks": [asdict(c) for c in self.checks],
         }

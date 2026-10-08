@@ -6,12 +6,13 @@ from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.api import check_api, compile_matrix
+from permitprobe.baseline import Baseline, apply_baseline, build_baseline
 from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
 from permitprobe.exploration import ExternalProvider, StateWriter, explore_api
 from permitprobe.handoff import check_handoff, write_bundle
 from permitprobe.openapi_inventory import inventory_openapi
-from permitprobe.policy import Policy, PolicyError, load_policy
+from permitprobe.policy import Policy, PolicyError, api_contract_digest, load_policy
 from permitprobe.read_demo import SCENARIOS, run_read_demo
 from permitprobe.report import Report
 from permitprobe.retest import load_prior_report, run_retest
@@ -43,6 +44,13 @@ def emit(report: Report, fmt: str, output: str | None = None) -> int:
         for item in report.checks:
             if item.outcome != "pass":
                 print(f"  {item.outcome.upper()} {item.code} [{item.target}]: {item.detail}")
+        if payload["baseline"]:
+            baseline = payload["baseline"]
+            print(
+                "  Baseline: "
+                f"{baseline['known']} known, {baseline['new']} new, "
+                f"{baseline['unobserved']} unobserved, {baseline['expired']} expired"
+            )
         if payload["inventory"]:
             inventory = payload["inventory"]
             print(
@@ -71,6 +79,8 @@ def parser() -> argparse.ArgumentParser:
             p.add_argument(
                 "--output", required=True, type=Path, help="Create a checked ZIP locally"
             )
+        else:
+            p.add_argument("--baseline", type=Path, help="Apply a reviewed known-finding baseline")
     demo = commands.add_parser("demo", help="Run synthetic fixtures on loopback")
     demo.add_argument(
         "--scenario",
@@ -133,6 +143,15 @@ def parser() -> argparse.ArgumentParser:
     inventory.add_argument("--openapi", required=True, type=Path)
     inventory.add_argument("--format", choices=("text", "json"), default="text")
     inventory.add_argument("--report", help="Create a new JSON report (never overwrite)")
+    inventory.add_argument("--baseline", type=Path, help="Apply a reviewed known-finding baseline")
+    baseline = commands.add_parser(
+        "baseline",
+        help="Create a reviewed known-finding baseline from a report",
+    )
+    baseline.add_argument("report", type=Path)
+    baseline.add_argument("--output", required=True, type=Path)
+    baseline.add_argument("--previous", type=Path)
+    baseline.add_argument("--format", choices=("text", "json"), default="text")
     commands.add_parser("schema", help="Print the policy JSON Schema")
     return root
 
@@ -161,7 +180,26 @@ def main(argv: list[str] | None = None) -> int:
             return emit(run_collection_demo(args.scenario), args.format, args.report)
         if args.command == "demo-read-paths":
             return emit(run_read_demo(args.scenario), args.format, args.report)
+        if args.command == "baseline":
+            previous = Baseline.load(args.previous) if args.previous else None
+            baseline, summary = build_baseline(load_prior_report(args.report), previous)
+            baseline.write(args.output)
+            if args.format == "json":
+                print(json.dumps(summary, indent=2))
+            else:
+                print(
+                    "PermitProbe baseline created: "
+                    f"{summary['entries']} entries, {summary['recorded']} recorded, "
+                    f"{summary['carried_unobserved']} carried unobserved"
+                )
+            return 0
         policy = load_policy(args.policy)
+        known = None
+        if getattr(args, "baseline", None):
+            if not policy.api:
+                raise PolicyError("a known-finding baseline requires an API policy")
+            known = Baseline.load(args.baseline)
+            known.require_policy(api_contract_digest(policy.api))
         if args.command == "explore":
             if not policy.api or args.state.exists():
                 raise PolicyError("explore needs an API policy and a new state path")
@@ -219,8 +257,10 @@ def main(argv: list[str] | None = None) -> int:
                 raise PolicyError("inventory-openapi needs an API policy")
             report = Report()
             inventory_openapi(policy.api, args.openapi, report)
+            if known:
+                apply_baseline(report, known)
             return emit(report, args.format, args.report)
-        report = Report()
+        report = Report(policy_digest=known.policy_digest if known else None)
         snapshot = {}
         if args.command == "check" and policy.api:
             check_api(policy.api, report)
@@ -244,6 +284,8 @@ def main(argv: list[str] | None = None) -> int:
                     "handoff",
                     "Cannot create bundle; no existing file overwritten.",
                 )
+        if known:
+            apply_baseline(report, known)
         return emit(report, args.format, args.report)
     except (PolicyError, OSError, ValueError, RecursionError):
         # No exception text: parsers and network libraries may quote secret input.
