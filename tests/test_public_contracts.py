@@ -91,6 +91,9 @@ def secured_public_policy(base_url="https://staging.example.invalid"):
                     "frame-ancestors": ["'none'"],
                 }
             },
+            "permissions_policy": {
+                "disabled_features": ["camera", "geolocation", "microphone"]
+            },
             "cross_origin_opener_policy": ["same-origin"],
             "cross_origin_embedder_policy": ["require-corp"],
             "cross_origin_resource_policy": ["same-origin"],
@@ -184,6 +187,26 @@ def public_server(scenario="safe"):
                     if active_scenario == "web-broad-csp"
                     else "default-src 'none'; frame-ancestors 'none'; script-src 'self'",
                 )
+                permissions_policy = (
+                    "camera=(self), geolocation=(), microphone=()"
+                    if active_scenario == "web-permissions-enabled"
+                    else "camera=(), geolocation=(), microphone=(), camera=()"
+                    if active_scenario == "web-permissions-duplicate-feature"
+                    else 'camera=(), geolocation=("https://media.example.invalid), microphone=()'
+                    if active_scenario == "web-permissions-malformed"
+                    else "Camera=(), geolocation=(), microphone=()"
+                    if active_scenario == "web-permissions-case-drift"
+                    else "camera=(), geolocation=(), microphone=(), future=1.2345"
+                    if active_scenario == "web-permissions-invalid-extension"
+                    else (
+                        "camera=();report-to=security, geolocation=(), microphone=(), "
+                        'fullscreen=(self "https://media.example.invalid";source=1 ?1);'
+                        "extension=:YWJj:, future=?1"
+                    )
+                )
+                self.send_header("Permissions-Policy", permissions_policy)
+                if active_scenario == "web-permissions-duplicate-header":
+                    self.send_header("Permissions-Policy", permissions_policy)
                 self.send_header(
                     "Cross-Origin-Opener-Policy",
                     "unsafe-none"
@@ -305,6 +328,7 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
         "web.referrer_policy",
         "web.frame_options",
         "web.content_security_policy",
+        "web.permissions_policy",
         "web.cross_origin_opener_policy",
         "web.cross_origin_embedder_policy",
         "web.cross_origin_resource_policy",
@@ -319,6 +343,7 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
     assert RESPONSE_COOKIE not in serialized
     assert TRUSTED_ORIGIN not in serialized
     assert HOSTILE_ORIGIN not in serialized
+    assert "media.example.invalid" not in serialized
 
 
 @pytest.mark.parametrize(
@@ -331,6 +356,12 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
         ("web-bad-frame", "web.frame_options"),
         ("web-weak-csp", "web.content_security_policy"),
         ("web-broad-csp", "web.content_security_policy"),
+        ("web-permissions-enabled", "web.permissions_policy"),
+        ("web-permissions-duplicate-feature", "web.permissions_policy"),
+        ("web-permissions-malformed", "web.permissions_policy"),
+        ("web-permissions-case-drift", "web.permissions_policy"),
+        ("web-permissions-invalid-extension", "web.permissions_policy"),
+        ("web-permissions-duplicate-header", "web.permissions_policy"),
         ("web-bad-coop", "web.cross_origin_opener_policy"),
         ("web-malformed-coop", "web.cross_origin_opener_policy"),
         ("web-bad-coep", "web.cross_origin_embedder_policy"),
@@ -656,6 +687,12 @@ def test_public_contract_rejects_unsafe_request_shapes(change):
         lambda resource: resource["response_security"]["security_headers"].update(
             cross_origin_opener_policy=["same-origin", "same-origin"]
         ),
+        lambda resource: resource["response_security"]["security_headers"][
+            "permissions_policy"
+        ].update(disabled_features=["camera", "camera"]),
+        lambda resource: resource["response_security"]["security_headers"][
+            "permissions_policy"
+        ].update(disabled_features=["Camera"]),
         lambda resource: resource["response_security"]["security_headers"].update(
             origin_agent_cluster=False
         ),

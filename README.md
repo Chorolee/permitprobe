@@ -296,6 +296,9 @@ isolation policies, and origin-keyed agent clustering:
           "frame-ancestors": ["'none'"]
         }
       },
+      "permissions_policy": {
+        "disabled_features": ["camera", "geolocation", "microphone"]
+      },
       "cross_origin_opener_policy": ["same-origin"],
       "cross_origin_embedder_policy": ["require-corp"],
       "cross_origin_resource_policy": ["same-origin"],
@@ -309,6 +312,10 @@ Header checks require one unambiguous field value. Missing, duplicated, malforme
 fail the declared contract. Each configured CSP directive must have exactly the declared token set;
 undeclared directives are not graded. The check does not execute a browser. HSTS has browser effect
 only over HTTPS, even though the synthetic loopback fixtures can exercise its parser over HTTP.
+Each required `Permissions-Policy` feature must be present exactly once with an empty allowlist
+(`feature=()`). PermitProbe parses the complete bounded structured dictionary, including supported
+origin allowlists and an optional token-valued `report-to` parameter, so malformed or duplicate
+members fail instead of being hidden behind a required feature.
 COOP and COEP accept valid structured-field parameters such as a string-valued `report-to` while
 grading the effective policy token. CORP values remain case-sensitive, and
 `origin_agent_cluster: true` requires the structured boolean `?1`. COOP plus compatible COEP can

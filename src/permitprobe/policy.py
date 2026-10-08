@@ -207,6 +207,19 @@ class CSPContract(Strict):
         return self
 
 
+class PermissionsPolicyContract(Strict):
+    disabled_features: list[str] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def valid(self):
+        if len(self.disabled_features) != len(set(self.disabled_features)) or any(
+            not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", feature)
+            for feature in self.disabled_features
+        ):
+            raise ValueError("disabled Permissions-Policy features must be safe and distinct")
+        return self
+
+
 class SecurityHeadersContract(Strict):
     hsts: HSTSContract | None = None
     content_type_options: Literal["nosniff"] | None = None
@@ -226,6 +239,7 @@ class SecurityHeadersContract(Strict):
         default_factory=list, max_length=2
     )
     content_security_policy: CSPContract | None = None
+    permissions_policy: PermissionsPolicyContract | None = None
     cross_origin_opener_policy: list[
         Literal["same-origin", "same-origin-allow-popups", "noopener-allow-popups"]
     ] = Field(default_factory=list, max_length=3)
@@ -245,6 +259,7 @@ class SecurityHeadersContract(Strict):
             and not self.referrer_policy
             and not self.frame_options
             and self.content_security_policy is None
+            and self.permissions_policy is None
             and not self.cross_origin_opener_policy
             and not self.cross_origin_embedder_policy
             and not self.cross_origin_resource_policy

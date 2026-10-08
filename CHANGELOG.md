@@ -12,6 +12,8 @@ while it is in the `0.x` development series.
   behavior without retaining observed header, Origin or cookie values.
 - Browser-facing contracts can also require COOP, COEP, CORP and `Origin-Agent-Cluster`, including
   bounded structured-field parsing for COOP/COEP reporting parameters.
+- Browser-facing contracts can require selected `Permissions-Policy` features to use empty
+  allowlists, with bounded parsing of the complete structured dictionary.
 
 ### Changed
 

@@ -87,6 +87,13 @@
                 ]
               }
             },
+            "permissions_policy": {
+              "disabled_features": [
+                "camera",
+                "geolocation",
+                "microphone"
+              ]
+            },
             "cross_origin_opener_policy": [
               "same-origin"
             ],

@@ -459,6 +459,25 @@
       "title": "LinkedResource",
       "type": "object"
     },
+    "PermissionsPolicyContract": {
+      "additionalProperties": false,
+      "properties": {
+        "disabled_features": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Disabled Features",
+          "type": "array"
+        }
+      },
+      "required": [
+        "disabled_features"
+      ],
+      "title": "PermissionsPolicyContract",
+      "type": "object"
+    },
     "PublicResource": {
       "additionalProperties": false,
       "properties": {
@@ -950,6 +969,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/CSPContract"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "permissions_policy": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PermissionsPolicyContract"
             },
             {
               "type": "null"
