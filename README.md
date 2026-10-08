@@ -687,14 +687,16 @@ uploaded or sent to an agent. Send the checked archive, not a re-read of the ori
 
 The built-in boundary refuses dotenv files, private-key files, credential directories,
 Git/private-memory directories, symlinks, hard links, non-regular files, binary content,
-path traversal, and configured size overruns. User deny patterns win over allow patterns;
+path traversal, cross-platform case or Unicode path collisions, and configured size overruns.
+User deny patterns win over allow patterns;
 neither can override the built-in exclusions. Glob patterns match the whole POSIX path,
 and `*` can cross directory separators. Include specific files rather than a broad `*`.
 
 Scanner configuration and inline `gitleaks:allow` comments in a payload cannot suppress
 the scan. Gitleaks runs with a small explicit environment, without inherited credentials
-or configuration overrides. It receives neutral filenames and private temporary files.
-These controls are a preflight check, not a sandbox for a malicious scanner executable.
+or configuration overrides. PermitProbe verifies the official platform-specific executable
+digest, copies those verified bytes into a private directory and runs that copy against neutral
+filenames and private temporary files.
 
 ## What is reused, and what PermitProbe adds
 

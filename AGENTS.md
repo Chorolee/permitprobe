@@ -15,6 +15,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Run `python -m pytest -q` and `ruff check src tests scripts` for behavior changes.
   Gitleaks 8.30.1 must be installed; missing-engine tests may not be silently skipped.
 - Keep explicit boundary checks and the checked-byte bundle guarantee covered by tests.
+- Bundle member paths must remain unique after Unicode normalization and case folding, including
+  the receipt name, so extraction cannot alias two separately checked entries.
 - Keep examples, README and the generated policy schema synchronized.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
 - Keep the project and import-package versions identical. Release candidates must pass a fresh
