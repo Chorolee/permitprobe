@@ -422,6 +422,12 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
         ("CONOUT$.log",),
         ("COM\N{SUPERSCRIPT ONE}.txt",),
         ("LPT9 .txt",),
+        ("question?.txt",),
+        ("wild*.txt",),
+        ("less<than.txt",),
+        ("greater>than.txt",),
+        ('double"quote.txt',),
+        ("vertical|bar.txt",),
     ],
 )
 def test_nonportable_archive_paths_are_rejected(names, tmp_path):
@@ -435,6 +441,15 @@ def test_nonportable_archive_paths_are_rejected(names, tmp_path):
     with pytest.raises(ValueError, match="canonical and portable"):
         write_bundle({name: b"synthetic" for name in names}, output)
     assert not output.exists()
+
+
+def test_overlong_windows_archive_component_is_rejected(tmp_path):
+    name = "x" * 256
+    report = Report()
+    assert collect(handoff([name]), tmp_path, report) == {}
+    assert report.exit_code == 1
+    with pytest.raises(ValueError, match="canonical and portable"):
+        write_bundle({name: b"synthetic"}, tmp_path / "overlong.zip")
 
 
 @pytest.mark.parametrize(
