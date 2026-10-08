@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "permitprobe"
-version = "0.3.0"
+version = "0.3.1"
 description = "Contract-driven website, API, data, and AI handoff security regression checks"
 readme = "README.md"
 requires-python = ">=3.11"
