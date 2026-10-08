@@ -4,10 +4,11 @@ Security Maintainer: Susan (@Chorolee)
 
 Responsible for vulnerability triage, security fixes, private vulnerability reports, and coordinated disclosure for PermitProbe.
 
-PermitProbe is an early security testing tool. Version 0.1.x is the current supported
-line. Report suspected security defects through this repository's private vulnerability
-reporting channel (Security → Report a vulnerability). If that channel is unavailable,
-contact the maintainer on GitHub to arrange a private report before sharing sensitive details.
+PermitProbe is an early security testing tool. Version 0.1.x is the current published supported
+line; 0.2.0 on `main` is release-preparation source until its tag and assets are published. Report
+suspected security defects through this repository's private vulnerability reporting channel
+(Security → Report a vulnerability). If that channel is unavailable, contact the maintainer on
+GitHub to arrange a private report before sharing sensitive details.
 Do not include real credentials, response bodies, or customer data in public issues.
 
 The threat model and current coverage limits are in the README. A passing check applies

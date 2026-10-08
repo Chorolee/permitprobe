@@ -6,7 +6,7 @@ on:
       tag:
         description: Published GitHub release tag
         required: true
-        default: v0.1.1
+        default: v0.2.0
         type: string
       publish:
         description: Upload to PyPI (false validates the release without uploading)
@@ -42,6 +42,14 @@ jobs:
           gh release download "$RELEASE_TAG" --repo Chorolee/permitprobe --dir dist --pattern 'permitprobe-*.whl' --pattern 'permitprobe-*.tar.gz'
           python scripts/verify_release.py --metadata release.json --dist dist --tag "$RELEASE_TAG"
           python -m twine check --strict dist/*
+      - name: Install the pinned handoff scanner
+        run: python scripts/install_gitleaks.py
+      - name: Smoke-test the published wheel
+        run: >-
+          python scripts/smoke_wheel.py
+          --wheel dist/permitprobe-*-py3-none-any.whl
+          --constraint requirements.lock
+          --gitleaks .tools/gitleaks
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: verified-distributions

@@ -1,4 +1,4 @@
-include AGENTS.md CONTRIBUTING.md SECURITY.md NOTICE LICENSE
+include AGENTS.md CHANGELOG.md CONTRIBUTING.md SECURITY.md NOTICE LICENSE
 include requirements.lock permitprobe.schema.json
 recursive-include examples *.json *.txt
 recursive-include docs *.md

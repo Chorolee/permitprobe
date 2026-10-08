@@ -13,6 +13,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Keep explicit boundary checks and the checked-byte bundle guarantee covered by tests.
 - Keep examples, README and the generated policy schema synchronized.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
+- Keep the project and import-package versions identical. Release candidates must pass a fresh
+  wheel install, strict metadata checks and the packaged safe demo before tagging.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.
