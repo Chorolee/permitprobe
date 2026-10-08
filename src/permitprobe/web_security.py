@@ -433,6 +433,8 @@ def cookie_results(
 
 
 def cors_origin_key(value: str) -> tuple[str, str, int] | None:
+    if value == "null":
+        return "null", "", 0
     if value != value.strip() or len(value) > 512 or any(
         ord(char) < 33 or ord(char) > 126 for char in value
     ):

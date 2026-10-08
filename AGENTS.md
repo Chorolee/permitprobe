@@ -73,6 +73,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   owner-only permissions; never replace an existing immutable artifact.
 - Match CORS allow-origin values to the request's serialized Origin byte-for-byte and accept only
   canonical request Origin values and the exact case-sensitive `true` credentials literal.
+- Treat the exact case-sensitive `null` value as a valid opaque serialized CORS Origin; variants
+  using it remain subject to the same explicit allow/deny classification and byte comparison.
 - Treat prior reports as strict bounded JSON: reject duplicate keys, non-finite values and invalid
   Unicode before validating finding lineage or compiling any retest request.
 - Pin GitHub Actions to an explicit supported runner OS as well as full action SHAs; runner label

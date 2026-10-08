@@ -36,6 +36,8 @@ while it is in the `0.x` development series.
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
 - Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
+- CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed
+  and other opaque-origin access to be classified explicitly with the same byte-exact response rule.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized
