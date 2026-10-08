@@ -4,7 +4,9 @@
 import argparse
 import base64
 import csv
+import gzip
 import hashlib
+import io
 import json
 import re
 import tarfile
@@ -17,6 +19,33 @@ from packaging.requirements import Requirement
 
 MAX_ARCHIVE_MEMBER = 5_000_000
 MAX_ARCHIVE_CONTENT = 50_000_000
+MAX_ARCHIVE_MEMBERS = 4_096
+MAX_TAR_STREAM = 64_000_000
+
+
+def _bounded_tar(path: Path) -> tarfile.TarFile:
+    """Open a gzip sdist only after bounding its complete decompressed stream."""
+
+    try:
+        with gzip.open(path, "rb") as compressed:
+            payload = compressed.read(MAX_TAR_STREAM + 1)
+    except (EOFError, OSError):
+        raise ValueError("Source archive is not a valid bounded gzip stream.") from None
+    if len(payload) > MAX_TAR_STREAM:
+        raise ValueError("Source archive expands beyond the verification limit.")
+    try:
+        return tarfile.open(fileobj=io.BytesIO(payload), mode="r:")
+    except tarfile.TarError:
+        raise ValueError("Source archive is not a valid tar stream.") from None
+
+
+def _bounded_tar_members(archive: tarfile.TarFile) -> list[tarfile.TarInfo]:
+    members = []
+    for member in archive:
+        if len(members) >= MAX_ARCHIVE_MEMBERS:
+            raise ValueError("Source archive has too many members.")
+        members.append(member)
+    return members
 
 
 def package_identity(raw: bytes, version: str) -> None:
@@ -194,6 +223,7 @@ def verify_executable_sources(
         names = [item.filename for item in entries]
         if (
             len(names) != len(set(names))
+            or len(entries) > MAX_ARCHIVE_MEMBERS
             or set(names) != allowed_wheel
             or any(not _canonical(name) for name in names)
             or any(item.is_dir() for item in entries)
@@ -237,8 +267,8 @@ def verify_executable_sources(
         f"{egg_info}/top_level.txt",
     }
     allowed_source = set(local) | generated_source
-    with tarfile.open(source, "r:gz") as archive:
-        members = archive.getmembers()
+    with _bounded_tar(source) as archive:
+        members = _bounded_tar_members(archive)
         root_name = prefix.rstrip("/")
         relative_names = []
         files = {}
@@ -343,7 +373,8 @@ def verify_release(release: dict, directory: Path, requested_tag: str) -> dict[s
             with zipfile.ZipFile(path) as archive:
                 entries = archive.infolist()
                 if (
-                    any(item.file_size > MAX_ARCHIVE_MEMBER for item in entries)
+                    len(entries) > MAX_ARCHIVE_MEMBERS
+                    or any(item.file_size > MAX_ARCHIVE_MEMBER for item in entries)
                     or sum(item.file_size for item in entries) > MAX_ARCHIVE_CONTENT
                 ):
                     raise ValueError("Wheel expands beyond the release verification limit.")
@@ -353,8 +384,12 @@ def verify_release(release: dict, directory: Path, requested_tag: str) -> dict[s
                     raise ValueError("Wheel still contains the conflicting old namespace.")
                 package_identity(archive.read(f"permitprobe-{version}.dist-info/METADATA"), version)
         else:
-            with tarfile.open(path, "r:gz") as archive:
-                member = archive.getmember(f"permitprobe-{version}/PKG-INFO")
+            with _bounded_tar(path) as archive:
+                expected = f"permitprobe-{version}/PKG-INFO"
+                members = _bounded_tar_members(archive)
+                member = next((item for item in members if item.name == expected), None)
+                if member is None:
+                    raise ValueError("Source distribution has no package metadata.")
                 if not member.isfile() or member.size > 1_000_000:
                     raise ValueError("Invalid source distribution metadata.")
                 package_identity(archive.extractfile(member).read(), version)

@@ -113,8 +113,9 @@ scanner installer verifies the official archive and executable digests before pu
 every scan verifies the executable again before use. CI scans the clean source checkout before
 generating artifacts, using fixed built-in scanner rules without repository suppression files or
 inline allow comments. Release verification runs from the trusted main checkout, requires the
-requested tag to be an ancestor of main, downloads registry artifacts, verifies their digests, and
-compares their executable package bytes with that exact commit.
+requested tag to be an ancestor of main, downloads registry artifacts, verifies their digests,
+bounds decompressed sdist bytes and archive member counts, and compares their executable package
+bytes with that exact commit.
 
 These measures make reviewed bytes traceable; they do not sandbox the Python interpreter, an
 installed dependency, the operating system, or a deliberately selected local executable.

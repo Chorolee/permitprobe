@@ -65,7 +65,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   page links, redirects, robots entries and sitemap locations are sanitized proposals and must
   never become requests automatically.
 - Registry publication must verify downloaded asset digests and prove executable wheel/sdist
-  package bytes match the requested release tag.
+  package bytes match the requested release tag, bounding the complete decompressed sdist stream
+  and every archive's member count during parsing.
 - Registry verification code, dependency locks and scanner installers must execute from the trusted
   main checkout; a requested release tag is data and source evidence, never the verifier.
 - Scanner installation must hash-verify the complete archive before publishing a complete executable
