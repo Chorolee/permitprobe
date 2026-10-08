@@ -26,6 +26,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- API response validation now preserves exact decimal numbers so large or high-precision values
+  cannot pass a different numeric schema constraint after binary floating-point rounding.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized

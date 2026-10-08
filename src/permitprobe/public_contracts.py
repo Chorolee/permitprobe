@@ -2,7 +2,6 @@
 
 import asyncio
 import hashlib
-import json
 import os
 from dataclasses import dataclass
 from math import ceil
@@ -11,14 +10,16 @@ from typing import Callable
 from urllib.parse import urlencode
 
 import httpx
-from jsonschema import Draft202012Validator
 
-from permitprobe.policy import API, PublicResource, RequestVariant, _unique, api_contract_digest
+from permitprobe.policy import API, PublicResource, RequestVariant, api_contract_digest
 from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import no_store_matches
 from permitprobe.validation import (
+    ExactDraft202012Validator,
     ValidationBudgetExceeded,
     ValidationLimiter,
+    exact_json_loads,
+    exact_validator,
     schema_errors,
 )
 from permitprobe.web_security import cors_origin_key, response_security_results
@@ -36,7 +37,7 @@ class PreparedPublic:
     config: API
     cases: list[PublicCase]
     headers: dict[str, dict[str, str]]
-    validators: dict[str, Draft202012Validator]
+    validators: dict[str, ExactDraft202012Validator]
 
 
 def _case_id(resource: str, variant: str) -> str:
@@ -123,7 +124,7 @@ def prepare_public(config: API, report: Report) -> PreparedPublic | None:
         cases,
         resolved,
         {
-            resource.name: Draft202012Validator(resource.response_schema)
+            resource.name: exact_validator(resource.response_schema)
             for resource in config.public_resources
             if resource.response_schema is not None
         },
@@ -250,11 +251,7 @@ def execute_public_cases(
         if status_ok and resource.response_schema is not None:
             try:
                 with validation_limiter.run():
-                    data = json.loads(
-                        text,
-                        object_pairs_hook=_unique,
-                        parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-                    )
+                    data = exact_json_loads(text)
                     errors = schema_errors(prepared.validators[resource.name], data)
             except ValidationBudgetExceeded:
                 outcomes.append("inconclusive")

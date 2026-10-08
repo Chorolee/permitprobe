@@ -27,6 +27,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   handoff failures or latency failures into a clean run.
 - Response parsing, schema evaluation and ownership validation must share a fail-closed local
   wall-clock budget; transport timeouts alone are insufficient.
+- Preserve response JSON numbers exactly through schema validation; binary floating-point rounding
+  must never make a different numeric value satisfy a declared response contract.
 - One-shot scans may read only discovery sources fixed by the explicit policy contract. Extracted
   page links, redirects, robots entries and sitemap locations are sanitized proposals and must
   never become requests automatically.
