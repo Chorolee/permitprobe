@@ -28,6 +28,24 @@ from permitprobe.retest import load_prior_report, run_retest
 from permitprobe.scan import run_scan
 
 
+def _target_request_envs(policy: Policy) -> set[str]:
+    if policy.api is None:
+        return set()
+    names = {
+        reference
+        for subject in policy.api.subjects
+        for reference in (subject.token_env, subject.cookie_env)
+        if reference is not None
+    }
+    names.update(
+        reference
+        for resource in policy.api.public_resources
+        for variant in resource.variants
+        for reference in variant.header_envs.values()
+    )
+    return names
+
+
 def emit(report: Report, fmt: str, output: str | None = None) -> int:
     payload = report.to_dict()
     if output:
@@ -293,6 +311,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "explore":
             if not policy.api or args.state.exists():
                 raise PolicyError("explore needs an API policy and a new state path")
+            if set(args.provider_env) & _target_request_envs(policy):
+                raise PolicyError("provider environment cannot include target request values")
             provider = ExternalProvider(
                 args.provider_name,
                 [str(args.provider_command), *args.provider_arg],

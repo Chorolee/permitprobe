@@ -27,8 +27,9 @@ permitprobe explore policy.json \
 
 Repeat `--provider-arg` for adapter arguments. The command is executed directly without a
 shell. It receives a small environment containing only `PATH`, `LANG`, and variables named by
-repeatable `--provider-env`. Subject token and cookie variables are not inherited implicitly.
-The adapter is trusted local code and is responsible for its own model authentication.
+repeatable `--provider-env`. A variable referenced by the policy for a subject credential or
+public request header cannot be forwarded this way. The adapter is trusted local code and is
+responsible for its own model authentication.
 Free-form provider rationale and correlation IDs are accepted for adapter interoperability but
 are neither execution inputs nor retained in reports or state. State records only whether they
 were present; capability proposals retain their typed gap and evidence dependencies.

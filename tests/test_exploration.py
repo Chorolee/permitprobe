@@ -457,6 +457,62 @@ def test_external_provider_is_model_neutral_and_receives_only_explicit_environme
     assert reply.rationale == "False:explicit"
 
 
+@pytest.mark.parametrize("request_value", ["credential", "public-header"])
+def test_explore_cli_refuses_to_forward_target_request_environment(
+    request_value, tmp_path, monkeypatch, capsys
+):
+    adapter = tmp_path / "must-not-run.py"
+    marker = tmp_path / "provider-ran"
+    adapter.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        "Path(sys.argv[1]).write_text('provider ran')\n"
+    )
+    data = read_policy()
+    sensitive = "PP_ALICE_COOKIE"
+    if request_value == "public-header":
+        sensitive = "PP_PUBLIC_COOKIE"
+        data["api"]["public_resources"] = [
+            {
+                "name": "public-page",
+                "path": "/public",
+                "variants": [
+                    {
+                        "name": "session-shaped",
+                        "header_envs": {"Cookie": sensitive},
+                    }
+                ],
+            }
+        ]
+        monkeypatch.setenv(sensitive, "synthetic-public-cookie")
+    policy = tmp_path / "policy.json"
+    policy.write_text(json.dumps(data))
+    state = tmp_path / "state.json"
+    with read_environment():
+        exit_code = main(
+            [
+                "explore",
+                str(policy),
+                "--provider-command",
+                "/usr/bin/python3",
+                "--provider-arg",
+                str(adapter),
+                "--provider-arg",
+                str(marker),
+                "--provider-env",
+                sensitive,
+                "--state",
+                str(state),
+                "--format",
+                "json",
+            ]
+        )
+    assert exit_code == 2
+    assert not marker.exists()
+    assert not state.exists()
+    assert json.loads(capsys.readouterr().out)["status"] == "inconclusive"
+
+
 def test_external_provider_stops_output_flood_and_its_child(tmp_path):
     adapter = tmp_path / "flood.py"
     marker = tmp_path / "child-survived"
