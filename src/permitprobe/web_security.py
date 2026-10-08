@@ -20,6 +20,11 @@ COOKIE_VALUE = re.compile(
     r'(?:"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*"|'
     r"[\x21\x23-\x2b\x2d-\x3a\x3c-\x5b\x5d-\x7e]*)"
 )
+_SF_WORD = r"[A-Za-z*][A-Za-z0-9!#$%&'*+.^_`|~:/-]*"
+_SF_STRING = r'"(?:[\x20-\x21\x23-\x5b\x5d-\x7e]|\\["\\])*"'
+_STRUCTURED_POLICY = re.compile(
+    rf"(?P<token>{_SF_WORD})(?:; *report-to={_SF_STRING})?"
+)
 
 
 def _values(headers: httpx.Headers, name: str) -> list[str]:
@@ -82,6 +87,13 @@ def _csp_matches(value: str | None, required: dict[str, list[str]]) -> bool:
     )
 
 
+def _structured_policy_matches(value: str | None, accepted: list[str]) -> bool:
+    if value is None:
+        return False
+    match = _STRUCTURED_POLICY.fullmatch(value)
+    return match is not None and match.group("token") in accepted
+
+
 def security_header_results(
     contract: SecurityHeadersContract, headers: httpx.Headers
 ) -> list[tuple[str, str, str]]:
@@ -130,6 +142,41 @@ def security_header_results(
                     contract.content_security_policy.required_directives,
                 ),
                 "content-security-policy",
+            )
+        )
+    for field, header, code, noun in (
+        (
+            contract.cross_origin_opener_policy,
+            "Cross-Origin-Opener-Policy",
+            "web.cross_origin_opener_policy",
+            "cross-origin-opener-policy",
+        ),
+        (
+            contract.cross_origin_embedder_policy,
+            "Cross-Origin-Embedder-Policy",
+            "web.cross_origin_embedder_policy",
+            "cross-origin-embedder-policy",
+        ),
+    ):
+        if field:
+            results.append(
+                _result(code, _structured_policy_matches(_one(headers, header), field), noun)
+            )
+    if contract.cross_origin_resource_policy:
+        value = _one(headers, "Cross-Origin-Resource-Policy")
+        results.append(
+            _result(
+                "web.cross_origin_resource_policy",
+                value in contract.cross_origin_resource_policy,
+                "cross-origin-resource-policy",
+            )
+        )
+    if contract.origin_agent_cluster is not None:
+        results.append(
+            _result(
+                "web.origin_agent_cluster",
+                _one(headers, "Origin-Agent-Cluster") == "?1",
+                "origin-agent-cluster",
             )
         )
     return results

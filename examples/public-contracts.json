@@ -86,7 +86,17 @@
                   "'none'"
                 ]
               }
-            }
+            },
+            "cross_origin_opener_policy": [
+              "same-origin"
+            ],
+            "cross_origin_embedder_policy": [
+              "require-corp"
+            ],
+            "cross_origin_resource_policy": [
+              "same-origin"
+            ],
+            "origin_agent_cluster": true
           },
           "cookies": [
             {

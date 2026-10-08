@@ -279,7 +279,8 @@ header-free variant for the same resource when one is declared.
 
 `response_security` extends an existing public GET contract without adding requests beyond its
 declared variants. It can require HSTS age/directives, `nosniff`, accepted Referrer-Policy and
-X-Frame-Options values, and selected CSP directives with stable source tokens:
+X-Frame-Options values, selected CSP directives with stable source tokens, browser cross-origin
+isolation policies, and origin-keyed agent clustering:
 
 ```json
 {
@@ -294,7 +295,11 @@ X-Frame-Options values, and selected CSP directives with stable source tokens:
           "default-src": ["'none'"],
           "frame-ancestors": ["'none'"]
         }
-      }
+      },
+      "cross_origin_opener_policy": ["same-origin"],
+      "cross_origin_embedder_policy": ["require-corp"],
+      "cross_origin_resource_policy": ["same-origin"],
+      "origin_agent_cluster": true
     }
   }
 }
@@ -304,6 +309,11 @@ Header checks require one unambiguous field value. Missing, duplicated, malforme
 fail the declared contract. Each configured CSP directive must have exactly the declared token set;
 undeclared directives are not graded. The check does not execute a browser. HSTS has browser effect
 only over HTTPS, even though the synthetic loopback fixtures can exercise its parser over HTTP.
+COOP and COEP accept valid structured-field parameters such as a string-valued `report-to` while
+grading the effective policy token. CORP values remain case-sensitive, and
+`origin_agent_cluster: true` requires the structured boolean `?1`. COOP plus compatible COEP can
+declare cross-origin isolation; each header is reported independently so a partial deployment fails
+the corresponding contract.
 
 Declared response cookies are matched by exact cookie name. Each contract can require `Secure`,
 `HttpOnly`, accepted `SameSite` values, host-only scope and an exact Path. Duplicate matching
