@@ -34,6 +34,8 @@ while it is in the `0.x` development series.
   matrix, which receives environment-reference placeholders while PermitProbe alone sends values.
 - Checked bundles reject case-insensitive and Unicode-normalization path collisions, including
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
+- Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
+  current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized
