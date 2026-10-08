@@ -342,8 +342,9 @@ cookies fail. `__Host-` and `__Secure-` declarations must include their prefix r
 ```
 
 CORS uses existing environment-backed `Origin` request variants. A contract must classify every
-and only variant that sends a distinct Origin as allowed or denied. Allowed credentialed responses
-require an exact matching origin and, by default, `Vary: Origin`; wildcard with credentials is invalid.
+and only variant that sends a distinct canonical serialized Origin as allowed or denied. Allowed
+credentialed responses require a byte-for-byte matching serialized origin, the exact
+case-sensitive value `true` and, by default, `Vary: Origin`; wildcard with credentials is invalid.
 Noncredentialed wildcard access must be opted into explicitly. Denied variants fail if the response
 reflects their origin or grants wildcard access. PermitProbe sends no OPTIONS preflight request.
 

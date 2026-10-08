@@ -16,6 +16,7 @@ from permitprobe.policy import Policy, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import run_retest
 from permitprobe.scan import run_scan
+from permitprobe.web_security import cors_origin_key
 
 ATTACKER_COOKIE = "session=synthetic-attacker-shape"
 TRUSTED_ORIGIN = "https://trusted.example.invalid"
@@ -263,10 +264,20 @@ def public_server(scenario="safe"):
                 elif origin and (
                     origin == TRUSTED_ORIGIN or active_scenario == "web-cors-reflect"
                 ):
-                    self.send_header("Access-Control-Allow-Origin", origin)
+                    allowed_origin = (
+                        origin + ":443"
+                        if active_scenario == "web-cors-default-port"
+                        else "HTTPS" + origin[5:]
+                        if active_scenario == "web-cors-origin-case"
+                        else origin
+                    )
+                    self.send_header("Access-Control-Allow-Origin", allowed_origin)
                     if active_scenario == "web-cors-duplicate":
                         self.send_header("Access-Control-Allow-Origin", origin)
-                    self.send_header("Access-Control-Allow-Credentials", "true")
+                    self.send_header(
+                        "Access-Control-Allow-Credentials",
+                        "True" if active_scenario == "web-cors-credentials-case" else "true",
+                    )
                     if active_scenario != "web-cors-no-vary":
                         self.send_header(
                             "Vary",
@@ -312,6 +323,21 @@ def test_public_only_contract_encodes_query_and_keeps_variant_values_out_of_repo
 def _security_environment(monkeypatch):
     monkeypatch.setenv("PP_TRUSTED_ORIGIN", TRUSTED_ORIGIN)
     monkeypatch.setenv("PP_HOSTILE_ORIGIN", HOSTILE_ORIGIN)
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://example.invalid",
+        "https://example.invalid:444",
+        "http://127.0.0.1:8080",
+        "http://[::1]:8080",
+        "https://xn--bcher-kva.example",
+        "https://example.invalid.",
+    ],
+)
+def test_cors_accepts_canonical_serialized_origins(origin):
+    assert cors_origin_key(origin) is not None
 
 
 def test_declared_response_security_contract_passes_without_retaining_values(monkeypatch):
@@ -377,6 +403,9 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
         ("web-cors-duplicate", "web.cors"),
         ("web-cors-malformed", "web.cors"),
         ("web-cors-no-vary", "web.cors"),
+        ("web-cors-default-port", "web.cors"),
+        ("web-cors-origin-case", "web.cors"),
+        ("web-cors-credentials-case", "web.cors"),
     ],
 )
 def test_response_security_contract_detects_declared_failures(scenario, code, monkeypatch):
@@ -598,6 +627,12 @@ def test_missing_variant_environment_value_sends_no_request(monkeypatch):
         "https://example.com:99999",
         "https://example.com?",
         "https://example.com#",
+        "HTTPS://example.com",
+        "https://example.com:443",
+        "https://EXAMPLE.com",
+        "https://bücher.example",
+        "http://127.000.000.001",
+        "https://example.123",
     ],
 )
 def test_invalid_cors_origin_sends_no_request(value, monkeypatch):
