@@ -270,6 +270,10 @@ def public_server(scenario="safe"):
                         self.send_header("Access-Control-Allow-Credentials", "true")
                 elif origin and active_scenario == "web-cors-malformed":
                     self.send_header("Access-Control-Allow-Origin", "https://[")
+                elif origin == "null" and active_scenario == "web-cors-null-only":
+                    self.send_header("Access-Control-Allow-Origin", "null")
+                    self.send_header("Access-Control-Allow-Credentials", "true")
+                    self.send_header("Vary", "Origin")
                 elif origin and (
                     origin == TRUSTED_ORIGIN or active_scenario == "web-cors-reflect"
                 ):
@@ -343,6 +347,7 @@ def _security_environment(monkeypatch):
         "http://[::1]:8080",
         "https://xn--bcher-kva.example",
         "https://example.invalid.",
+        "null",
     ],
 )
 def test_cors_accepts_canonical_serialized_origins(origin):
@@ -390,6 +395,32 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
     assert TRUSTED_ORIGIN not in serialized
     assert HOSTILE_ORIGIN not in serialized
     assert "media.example.invalid" not in serialized
+
+
+def test_cors_can_allow_and_deny_the_opaque_null_origin(monkeypatch):
+    monkeypatch.setenv("PP_TRUSTED_ORIGIN", "null")
+    monkeypatch.setenv("PP_HOSTILE_ORIGIN", HOSTILE_ORIGIN)
+    with public_server("web-cors-null-only") as (url, requests):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
+    assert len(requests) == 3
+    assert '"null"' not in json.dumps(report.to_dict())
+
+
+def test_cors_rejects_reflected_opaque_null_origin(monkeypatch):
+    monkeypatch.setenv("PP_TRUSTED_ORIGIN", TRUSTED_ORIGIN)
+    monkeypatch.setenv("PP_HOSTILE_ORIGIN", "null")
+    with public_server("web-cors-reflect") as (url, _):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 1, report.to_dict()
+    assert any(
+        check.code == "web.cors"
+        and check.target.endswith("/hostile-origin")
+        and check.outcome == "fail"
+        for check in report.checks
+    )
 
 
 @pytest.mark.parametrize(
@@ -702,7 +733,6 @@ def test_missing_variant_environment_value_sends_no_request(monkeypatch):
     "value",
     [
         "",
-        "null",
         "file://local",
         "https://user@example.com",
         "https://[",
