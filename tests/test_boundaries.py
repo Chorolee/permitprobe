@@ -5,6 +5,7 @@ import os
 import stat
 import subprocess
 import sys
+import warnings
 import zipfile
 from decimal import Decimal
 from pathlib import Path
@@ -314,6 +315,21 @@ def test_policy_accepts_supported_assertions_annotations_and_2020_dialect():
         }
     )
     assert Policy.model_validate(data)
+
+
+@pytest.mark.parametrize("location", ["pattern", "patternProperties"])
+def test_policy_rejects_ambiguous_python_schema_patterns_without_warning(location):
+    data = example_policy()
+    schema = data["api"]["resources"][0]["response_schema"]
+    if location == "pattern":
+        schema["properties"]["title"]["pattern"] = "[a-z&&[^b]]"
+    else:
+        schema["patternProperties"] = {"[a-z&&[^b]]": {"type": "string"}}
+    with warnings.catch_warnings(record=True) as observed:
+        warnings.simplefilter("always")
+        with pytest.raises(ValidationError):
+            Policy.model_validate(data)
+    assert observed == []
 
 
 @pytest.mark.parametrize(

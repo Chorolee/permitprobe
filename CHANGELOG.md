@@ -36,6 +36,8 @@ while it is in the `0.x` development series.
   annotations and creating false assurance that an email, URI, or other format was checked.
 - Executable response schemas now reject unknown, legacy, content-annotation and alternate-dialect
   keywords instead of silently ignoring misspelled or unsupported security constraints.
+- JSON Schema patterns that Python marks as ambiguous are rejected without emitting a warning,
+  preventing version-dependent character-set semantics from changing a response verdict.
 - Policy, OpenAPI, baseline, prior-report and replay inputs now resolve to bounded regular files and
   are opened nonblocking, preventing FIFOs or device paths from stalling an assessment.
 - Handoff scans now hash-pin the official Gitleaks executable itself and run a private verified

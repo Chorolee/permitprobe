@@ -55,6 +55,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   accept an annotation that a policy author could mistake for an enforced response constraint.
 - Permit only the reviewed Draft 2020-12 keyword set at actual schema nodes; unknown, legacy,
   content-annotation and alternate-dialect keywords must fail policy validation.
+- Convert Python regular-expression ambiguity warnings during JSON Schema checking into policy
+  failures; a version-dependent pattern must never become an executable response assertion.
 - One-shot scans may read only discovery sources fixed by the explicit policy contract. Extracted
   page links, redirects, robots entries and sitemap locations are sanitized proposals and must
   never become requests automatically.
