@@ -206,6 +206,87 @@ def test_operation_parameter_overrides_path_parameter(tmp_path):
         lambda document: document["paths"]["/search"].update(get=[]),
         lambda document: document["paths"]["/search"]["get"].update(security="public"),
         lambda document: document.update(security=[{"unknownScheme": []}]),
+        lambda document: document.update(security=[{"bearerAuth": ["read", "read"]}]),
+        lambda document: document["components"]["securitySchemes"].update(bearerAuth={}),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": []}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"$ref": "https://example.invalid/security.json"}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "http"}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "apiKey", "name": "X-Key", "in": "body"}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "oauth2", "flows": {}}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "openIdConnect"}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={
+                "type": "openIdConnect",
+                "openIdConnectUrl": "http://identity.example.invalid/.well-known/openid-configuration",
+            }
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={
+                "type": "openIdConnect",
+                "openIdConnectUrl": "https://identity.example.invalid:/openid",
+            }
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "oauth2", "flows": {"unknownFlow": {}}}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "oauth2", "flows": {"clientCredentials": {}}}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={
+                "type": "oauth2",
+                "flows": {
+                    "clientCredentials": {
+                        "tokenUrl": "http://identity.example.invalid/token",
+                        "scopes": {},
+                    }
+                },
+            }
+        ),
+        lambda document: (
+            document.update(security=[{"bearerAuth": ["write"]}]),
+            document["components"]["securitySchemes"].update(
+                bearerAuth={
+                    "type": "oauth2",
+                    "flows": {
+                        "clientCredentials": {
+                            "tokenUrl": "https://identity.example.invalid/token",
+                            "scopes": {"read": "Read access"},
+                        }
+                    },
+                }
+            ),
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={
+                "type": "oauth2",
+                "flows": {
+                    "deviceAuthorization": {
+                        "deviceAuthorizationUrl": "https://identity.example.invalid/device",
+                        "tokenUrl": "https://identity.example.invalid/token",
+                        "scopes": {},
+                    }
+                },
+            }
+        ),
+        lambda document: (
+            document.update(openapi="3.0.4"),
+            document["components"]["securitySchemes"].update(
+                bearerAuth={"type": "mutualTLS"}
+            ),
+        ),
         lambda document: document["components"]["parameters"]["SearchQuery"].update(required="yes"),
         lambda document: document["paths"]["/search"].update(
             parameters=[{"$ref": "https://example.invalid/parameter.json"}]
@@ -218,6 +299,55 @@ def test_invalid_or_ambiguous_openapi_is_rejected(tmp_path, mutate):
     _, openapi_path = write_inputs(tmp_path, document=document)
     with pytest.raises(PolicyError):
         inventory_openapi(Policy.model_validate(inventory_policy()).api, openapi_path, Report())
+
+
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        {"type": "apiKey", "name": "X-API-Key", "in": "header"},
+        {"type": "http", "scheme": "bearer"},
+        {"type": "mutualTLS"},
+        {
+            "type": "oauth2",
+            "flows": {
+                "clientCredentials": {
+                    "tokenUrl": "https://identity.example.invalid/token",
+                    "scopes": {"read": "Read access"},
+                }
+            },
+        },
+        {
+            "type": "openIdConnect",
+            "openIdConnectUrl": "https://identity.example.invalid/.well-known/openid-configuration",
+        },
+    ],
+)
+def test_inventory_accepts_supported_security_scheme_shapes(tmp_path, scheme):
+    document = openapi_document()
+    document["components"]["securitySchemes"]["bearerAuth"] = scheme
+    _, openapi_path = write_inputs(tmp_path, document=document)
+    report = Report()
+    inventory_openapi(Policy.model_validate(inventory_policy()).api, openapi_path, report)
+    assert report.exit_code == 0, report.to_dict()
+
+
+def test_openapi_32_accepts_device_authorization_flow(tmp_path):
+    document = openapi_document()
+    document["openapi"] = "3.2.0"
+    document["components"]["securitySchemes"]["bearerAuth"] = {
+        "type": "oauth2",
+        "flows": {
+            "deviceAuthorization": {
+                "deviceAuthorizationUrl": "https://identity.example.invalid/device",
+                "tokenUrl": "https://identity.example.invalid/token",
+                "scopes": {},
+            }
+        },
+    }
+    _, openapi_path = write_inputs(tmp_path, document=document)
+    report = Report()
+    inventory_openapi(Policy.model_validate(inventory_policy()).api, openapi_path, report)
+    assert report.exit_code == 0, report.to_dict()
 
 
 def test_duplicate_keys_and_size_limit_are_rejected(tmp_path, monkeypatch):
