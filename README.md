@@ -312,6 +312,8 @@ Header checks require one unambiguous field value. Missing, duplicated, malforme
 fail the declared contract. Each configured CSP directive must have exactly the declared token set;
 undeclared directives are not graded. The check does not execute a browser. HSTS has browser effect
 only over HTTPS, even though the synthetic loopback fixtures can exercise its parser over HTTP.
+HSTS `max-age` accepts the RFC decimal or quoted-decimal form and compares arbitrarily long values
+without a fixed-width integer conversion.
 Each required `Permissions-Policy` feature must be present exactly once with an empty allowlist
 (`feature=()`). PermitProbe parses the complete bounded structured dictionary, including supported
 origin allowlists and an optional token-valued `report-to` parameter, so malformed or duplicate
