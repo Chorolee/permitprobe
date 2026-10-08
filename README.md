@@ -557,6 +557,8 @@ PermitProbe includes a bounded active explorer. The AI observes normalized resul
 hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains control of
 credentials, HTTP delivery, expected policy, classification, budgets, coverage and completion.
 The provider cannot create a URL, header, token, request body, shell command or tool call.
+Variables explicitly forwarded with `--provider-env` may supply model authentication, but a
+variable referenced by policy for a subject credential or public request header is rejected.
 
 Providers use a JSON-over-stdio protocol, so Astra, Claude, Gemini, local models, agent
 frameworks and deterministic programs can all use the same contract. The core contains no

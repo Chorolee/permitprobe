@@ -38,6 +38,9 @@ while it is in the `0.x` development series.
   copy, so a forged version string or scanner path replacement cannot execute untrusted bytes.
 - Live bearer tokens and cookies are now kept outside the third-party planning and classification
   matrix, which receives environment-reference placeholders while PermitProbe alone sends values.
+- Exploration rejects attempts to forward any policy-referenced credential or request-header
+  environment variable to a provider, preventing an explicit allowlist mistake from crossing the
+  target-delivery boundary.
 - Checked bundles reject case-insensitive and Unicode-normalization path collisions, including
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
 - Handoff roots must now be canonical paths relative to the real policy file; traversal, absolute
