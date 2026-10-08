@@ -124,7 +124,10 @@ def test_dependency_installation_is_complete_and_hash_locked():
     lines = (root / "requirements.lock").read_text().splitlines()
     packages = set()
     for index, line in enumerate(lines):
-        match = re.fullmatch(r"([A-Za-z0-9][A-Za-z0-9_.-]*)==[^ ]+ \\", line)
+        match = re.fullmatch(
+            r'([A-Za-z0-9][A-Za-z0-9_.-]*)==[^ ]+(?: ; python_version < "3\.12")? \\',
+            line,
+        )
         if match is None:
             continue
         packages.add(match.group(1).lower().replace("_", "-"))
@@ -151,6 +154,11 @@ def test_dependency_installation_is_complete_and_hash_locked():
         "wheel",
     } <= packages
     assert "boundaryguard" not in packages
+    for name in ("backports-tarfile", "importlib-metadata", "zipp"):
+        assert any(
+            line.startswith(name + "==") and '; python_version < "3.12"' in line
+            for line in lines
+        )
 
     ci = (root / ".github" / "workflows" / "ci.yml").read_text()
     publish = (root / ".github" / "workflows" / "publish-pypi.yml").read_text()

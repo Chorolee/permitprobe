@@ -1,7 +1,6 @@
-# Generated from pyproject.toml with Python 3.14 and pip-tools 7.6.2:
-# pip-compile --extra dev --generate-hashes --allow-unsafe --strip-extras \
-#   --resolver backtracking --no-emit-index-url --no-emit-trusted-host \
-#   --no-header --output-file requirements.lock pyproject.toml
+# Generated from pyproject.toml with pip-tools 7.6.2 on Python 3.14 and 3.11.
+# Recompile without --upgrade on both supported versions, then retain Python 3.11-only
+# requirement blocks with their python_version marker.
 # Install with: python -m pip install --require-hashes -r requirements.lock
 
 annotated-doc==0.0.5 \
@@ -22,6 +21,10 @@ attrs==26.1.0 \
     # via
     #   jsonschema
     #   referencing
+backports-tarfile==1.2.0 ; python_version < "3.12" \
+    --hash=sha256:77e284d754527b01fb1e6fa8a1afe577858ebe4e9dad8919e34c862cb399bc34 \
+    --hash=sha256:d75e02c268746e1b8144c278978b6e98e85de6ad16f8e4b0844a154557eca991
+    # via jaraco-context
 build==1.6.1 \
     --hash=sha256:51cc11666391ab6f092070437ac747002ff46f3e4113a3622177ee6b488bfc53 \
     --hash=sha256:ecd351a4be9d35a9eaaba244a7687143c9c7d4aea6ac964e7e7ddab20cbcf4e7
@@ -399,6 +402,10 @@ idna==3.20 \
     #   anyio
     #   httpx
     #   requests
+importlib-metadata==9.0.1 ; python_version < "3.12" \
+    --hash=sha256:ab830580bc0ef3db61ce8fae716389e5462b67e033018bab6d8f80ef17172f99 \
+    --hash=sha256:bba5600596a7e21f3eef53281cf28d6a5195634d2f2b78ff9501a3272c6eaab0
+    # via keyring
 iniconfig==2.3.1 \
     --hash=sha256:67f4b9c50da0dedf52af349e7749a80a9057a5031199791b906c3bb3ae878960 \
     --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
@@ -920,6 +927,7 @@ typing-extensions==4.16.0 \
     #   anyio
     #   pydantic
     #   pydantic-core
+    #   referencing
     #   typing-inspection
 typing-inspection==0.4.4 \
     --hash=sha256:547274fa6b0a561ccf549cc9524b999a578e737d015d8709d021f9d0d13bea47 \
@@ -936,6 +944,10 @@ wheel==0.48.0 \
     --hash=sha256:3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab \
     --hash=sha256:94800765601e9171bf5d58d066e640662842bcedcbab982b2c90787a2c987322
     # via permitprobe (pyproject.toml)
+zipp==4.1.1 ; python_version < "3.12" \
+    --hash=sha256:7ebb7a44c021b29fd8dbd7cce6812d0d7b5b454521f93cc71af6ccd155aaa70b \
+    --hash=sha256:8979f52d874162f485ff2981e3891f3a3317b7a3dd43ff1e1775b9304f307a9c
+    # via importlib-metadata
 
 # The following packages are considered to be unsafe in a requirements file:
 setuptools==84.0.0 \
