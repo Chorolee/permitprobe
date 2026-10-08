@@ -18,6 +18,11 @@ while it is in the `0.x` development series.
 - GitHub now runs pinned Python CodeQL and pull-request dependency review, with weekly grouped
   Dependabot updates for Python packages and GitHub Actions.
 
+### Security
+
+- The synthetic read-path demo emits redirects only for its declared canonical fixture paths;
+  request path input can no longer flow into a response `Location` header.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added
