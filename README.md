@@ -790,7 +790,8 @@ local-process assumptions, artifact boundary, and fail-closed guarantees in one 
 - JSON Schemas use a strict Draft 2020-12 keyword set. Unknown, legacy and content-annotation
   keywords, reference keywords, `format` assertions, and other declared dialects are rejected
   rather than silently ignored. Denial responses must also be valid JSON matching their declared
-  schema.
+  schema. Regular expressions that Python identifies as ambiguous are also rejected at policy
+  load instead of running with version-dependent character-set semantics.
 - These observations are **not** a proof of database grants, RLS, complete storage/bucket policy,
   GraphQL, intermediary cache behavior, or write-path correctness. Cache checks cover response
   headers only. The tool never connects to a database in v0.3.

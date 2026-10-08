@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 import json
 import re
+import warnings
 from decimal import Decimal
 from pathlib import Path, PurePosixPath
 from typing import Literal
@@ -218,6 +219,15 @@ def _check_supported_schema(schema: dict) -> None:
         dialect = node.get("$schema")
         if dialect is not None and dialect not in _DRAFT_2020_12_SCHEMAS:
             raise ValueError("response schema must use Draft 2020-12")
+
+
+def _check_response_schema(schema: dict) -> None:
+    # Python rejects some nonportable regular expressions outright and warns when
+    # a character set has ambiguous future semantics. Neither can be an assertion.
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        Draft202012Validator.check_schema(schema)
+    _check_supported_schema(schema)
 
 
 class Collection(Strict):
@@ -510,10 +520,9 @@ class PublicResource(Strict):
             try:
                 if not self.response_schema:
                     raise ValueError
-                Draft202012Validator.check_schema(self.response_schema)
+                _check_response_schema(self.response_schema)
             except Exception:
                 raise ValueError("invalid or empty public response JSON Schema") from None
-            _check_supported_schema(self.response_schema)
         return self
 
 
@@ -571,12 +580,9 @@ class Resource(Strict):
                     continue
                 if not schema:
                     raise ValueError("empty schema")
-                Draft202012Validator.check_schema(schema)
+                _check_response_schema(schema)
         except Exception:
             raise ValueError("invalid or empty response JSON Schema") from None
-        for schema in (self.response_schema, self.denial_schema):
-            if schema is not None:
-                _check_supported_schema(schema)
         return self
 
 
