@@ -30,6 +30,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   never become requests automatically.
 - Registry publication must verify downloaded asset digests and prove executable wheel/sdist
   package bytes match the requested release tag.
+- Keep GitHub Actions pinned to full commit SHAs. Dependency updates must pass dependency review,
+  CodeQL and the ordinary test/build workflow before release.
 - Replay manifests may contain only digests and normalized case IDs. Replay must bind to the same
   target origin, require the exact deterministic baseline, revalidate every ID against the current
   policy catalogue, invoke no provider, and preserve the GET-only zero-write boundary.

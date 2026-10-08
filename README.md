@@ -707,6 +707,10 @@ Tests use real loopback HTTP and the installed Gitleaks binary. Missing Gitleaks
 suite rather than silently skipping secret-detection tests. Set `PERMITPROBE_GITLEAKS`
 to an absolute binary path when it is not at `.tools/gitleaks`.
 
+Repository security automation runs Python CodeQL on pushes, pull requests and a weekly schedule.
+Pull requests also receive dependency review, while grouped Python and GitHub Actions updates are
+proposed weekly through Dependabot. Workflow actions remain pinned to full commit SHAs.
+
 ## What expanding verification means
 
 This means adding **security checks that users can apply to their services**, separately
