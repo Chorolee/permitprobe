@@ -21,6 +21,7 @@ from permitprobe.validation import (
     ValidationLimiter,
     schema_errors,
 )
+from permitprobe.web_security import cors_origin_key, response_security_results
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ def prepare_public(config: API, report: Report) -> PreparedPublic | None:
     _configure(report)
     cases = public_cases(config)
     resolved: dict[str, dict[str, str]] = {}
+    seen_cors_origins = set()
     for case in cases:
         headers = {}
         for name, env in case.variant.header_envs.items():
@@ -93,6 +95,23 @@ def prepare_public(config: API, report: Report) -> PreparedPublic | None:
                 )
                 return None
             headers[name] = value
+        response_security = case.resource.response_security
+        cors = response_security.cors if response_security else None
+        if cors and case.variant.name in {*cors.allow_variants, *cors.deny_variants}:
+            origin = next(
+                (value for name, value in headers.items() if name.lower() == "origin"),
+                "",
+            )
+            origin_key = cors_origin_key(origin)
+            if origin_key is None or (case.resource.name, origin_key) in seen_cors_origins:
+                report.add(
+                    "public.configuration",
+                    "inconclusive",
+                    case.resource.name,
+                    "Declared CORS request Origins must be valid and distinct.",
+                )
+                return None
+            seen_cors_origins.add((case.resource.name, origin_key))
         resolved[case.id] = headers
     digest = api_contract_digest(config)
     if report.policy_digest is not None and report.policy_digest != digest:
@@ -202,6 +221,7 @@ def execute_public_cases(
             continue
 
         elapsed = _elapsed_ms(started, clock)
+        response_headers = httpx.Headers(response_headers)
         outcomes = []
         status_ok = status in resource.expected_statuses
         outcomes.append("pass" if status_ok else "fail")
@@ -279,6 +299,29 @@ def execute_public_cases(
                 else "Response does not match the declared no-store cache contract.",
                 case.id,
             )
+
+        if status_ok and resource.response_security is not None:
+            try:
+                with validation_limiter.run():
+                    security_results = response_security_results(
+                        resource.response_security,
+                        case.variant.name,
+                        prepared.headers[case.id],
+                        response_headers,
+                    )
+            except ValidationBudgetExceeded:
+                outcomes.append("inconclusive")
+                report.add(
+                    "data.validation_budget",
+                    "inconclusive",
+                    target,
+                    "Response security validation exceeded the total validation budget.",
+                    case.id,
+                )
+            else:
+                for code, outcome, detail in security_results:
+                    outcomes.append(outcome)
+                    report.add(code, outcome, target, detail, case.id)
 
         report.observe(
             Evidence(

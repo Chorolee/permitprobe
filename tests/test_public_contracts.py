@@ -9,13 +9,19 @@ import pytest
 from pydantic import ValidationError
 
 import permitprobe.api as api_module
+import permitprobe.public_contracts as public_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
-from permitprobe.policy import Policy
+from permitprobe.policy import Policy, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import run_retest
+from permitprobe.scan import run_scan
 
 ATTACKER_COOKIE = "session=synthetic-attacker-shape"
+TRUSTED_ORIGIN = "https://trusted.example.invalid"
+HOSTILE_ORIGIN = "https://hostile.example.invalid"
+RESPONSE_COOKIE = "synthetic-browser-cookie-never-report"
+LEGACY_PUBLIC_DIGEST = "c01077d0b7c69ff20ba8fd90875cd888fe2fc677d67eba1140bc7acb70137292"
 
 
 def public_policy(base_url="https://staging.example.invalid"):
@@ -56,6 +62,56 @@ def public_policy(base_url="https://staging.example.invalid"):
     }
 
 
+def secured_public_policy(base_url="https://staging.example.invalid"):
+    data = public_policy(base_url)
+    resource = data["api"]["public_resources"][0]
+    resource["variants"] = [
+        {"name": "default"},
+        {
+            "name": "trusted-origin",
+            "header_envs": {"Origin": "PP_TRUSTED_ORIGIN"},
+        },
+        {
+            "name": "hostile-origin",
+            "header_envs": {"Origin": "PP_HOSTILE_ORIGIN"},
+        },
+    ]
+    resource["response_security"] = {
+        "security_headers": {
+            "hsts": {
+                "min_max_age": 31_536_000,
+                "include_subdomains": True,
+            },
+            "content_type_options": "nosniff",
+            "referrer_policy": ["no-referrer", "strict-origin-when-cross-origin"],
+            "frame_options": ["deny"],
+            "content_security_policy": {
+                "required_directives": {
+                    "default-src": ["'none'"],
+                    "frame-ancestors": ["'none'"],
+                }
+            },
+        },
+        "cookies": [
+            {
+                "name": "__Host-session",
+                "secure": True,
+                "http_only": True,
+                "same_site": ["strict", "lax"],
+                "host_only": True,
+                "path": "/",
+            }
+        ],
+        "cors": {
+            "allow_variants": ["trusted-origin"],
+            "deny_variants": ["hostile-origin"],
+            "allow_credentials": True,
+            "require_vary_origin": True,
+        },
+    }
+    return data
+
+
 @contextmanager
 def public_server(scenario="safe"):
     class ScenarioRequests(list):
@@ -92,6 +148,79 @@ def public_server(scenario="safe"):
                 "Cache-Control",
                 "public, max-age=60" if active_scenario == "cacheable" else "no-store",
             )
+            if active_scenario.startswith("web-"):
+                self.send_header(
+                    "Strict-Transport-Security",
+                    "max-age=60"
+                    if active_scenario == "web-weak-hsts"
+                    else "max-age=63072000; includeSubDomains; preload",
+                )
+                if active_scenario == "web-duplicate-hsts":
+                    self.send_header(
+                        "Strict-Transport-Security",
+                        "max-age=63072000; includeSubDomains",
+                    )
+                if active_scenario != "web-missing-nosniff":
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header(
+                    "Referrer-Policy",
+                    "unsafe-url"
+                    if active_scenario == "web-bad-referrer"
+                    else "strict-origin-when-cross-origin",
+                )
+                self.send_header(
+                    "X-Frame-Options",
+                    "SAMEORIGIN" if active_scenario == "web-bad-frame" else "DENY",
+                )
+                self.send_header(
+                    "Content-Security-Policy",
+                    "default-src 'none'"
+                    if active_scenario == "web-weak-csp"
+                    else "default-src 'none'; frame-ancestors 'none' https:"
+                    if active_scenario == "web-broad-csp"
+                    else "default-src 'none'; frame-ancestors 'none'; script-src 'self'",
+                )
+                cookie = (
+                    f"__Host-session={RESPONSE_COOKIE}; SameSite=Lax; Path=/"
+                    if active_scenario == "web-cookie-flags"
+                    else f"__Host-session={RESPONSE_COOKIE}; Secure=false; HttpOnly=false; SameSite=Lax; Path=/"
+                    if active_scenario == "web-cookie-false-flags"
+                    else f"__Host-session={RESPONSE_COOKIE}; Secure; HttpOnly; SameSite=Lax; Path=/"
+                )
+                if active_scenario == "web-cookie-empty-domain":
+                    cookie += "; Domain="
+                if active_scenario == "web-cookie-partitioned":
+                    cookie += "; Partitioned"
+                self.send_header("Set-Cookie", cookie)
+                if active_scenario == "web-cookie-duplicate":
+                    self.send_header("Set-Cookie", cookie)
+                if active_scenario == "web-cookie-combined":
+                    self.send_header(
+                        "Set-Cookie",
+                        cookie + ", unrelated=synthetic; Secure; Path=/",
+                    )
+                origin = headers.get("Origin")
+                if origin and active_scenario in (
+                    "web-cors-wildcard",
+                    "web-cors-wildcard-credentials",
+                ):
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    if active_scenario == "web-cors-wildcard-credentials":
+                        self.send_header("Access-Control-Allow-Credentials", "true")
+                elif origin and active_scenario == "web-cors-malformed":
+                    self.send_header("Access-Control-Allow-Origin", "https://[")
+                elif origin and (
+                    origin == TRUSTED_ORIGIN or active_scenario == "web-cors-reflect"
+                ):
+                    self.send_header("Access-Control-Allow-Origin", origin)
+                    if active_scenario == "web-cors-duplicate":
+                        self.send_header("Access-Control-Allow-Origin", origin)
+                    self.send_header("Access-Control-Allow-Credentials", "true")
+                    if active_scenario != "web-cors-no-vary":
+                        self.send_header(
+                            "Vary",
+                            "*" if active_scenario == "web-cors-vary-star" else "Origin",
+                        )
             self.send_header("Content-Length", str(len(raw)))
             self.end_headers()
             try:
@@ -127,6 +256,146 @@ def test_public_only_contract_encodes_query_and_keeps_variant_values_out_of_repo
     assert payload["coverage"] == {"planned": 2, "observed": 2, "unprobed": []}
     assert all(isinstance(item["elapsed_ms"], int) for item in payload["evidence"])
     assert ATTACKER_COOKIE not in json.dumps(payload)
+
+
+def _security_environment(monkeypatch):
+    monkeypatch.setenv("PP_TRUSTED_ORIGIN", TRUSTED_ORIGIN)
+    monkeypatch.setenv("PP_HOSTILE_ORIGIN", HOSTILE_ORIGIN)
+
+
+def test_declared_response_security_contract_passes_without_retaining_values(monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server("web-safe") as (url, requests):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
+    assert len(requests) == 3
+    codes = {check.code for check in report.checks if check.code.startswith("web.")}
+    assert codes == {
+        "web.hsts",
+        "web.content_type_options",
+        "web.referrer_policy",
+        "web.frame_options",
+        "web.content_security_policy",
+        "web.cookies",
+        "web.cors",
+    }
+    assert all(
+        check.outcome == "pass" for check in report.checks if check.code.startswith("web.")
+    )
+    serialized = json.dumps(report.to_dict())
+    assert RESPONSE_COOKIE not in serialized
+    assert TRUSTED_ORIGIN not in serialized
+    assert HOSTILE_ORIGIN not in serialized
+
+
+@pytest.mark.parametrize(
+    "scenario,code",
+    [
+        ("web-weak-hsts", "web.hsts"),
+        ("web-duplicate-hsts", "web.hsts"),
+        ("web-missing-nosniff", "web.content_type_options"),
+        ("web-bad-referrer", "web.referrer_policy"),
+        ("web-bad-frame", "web.frame_options"),
+        ("web-weak-csp", "web.content_security_policy"),
+        ("web-broad-csp", "web.content_security_policy"),
+        ("web-cookie-flags", "web.cookies"),
+        ("web-cookie-false-flags", "web.cookies"),
+        ("web-cookie-empty-domain", "web.cookies"),
+        ("web-cookie-duplicate", "web.cookies"),
+        ("web-cookie-combined", "web.cookies"),
+        ("web-cors-reflect", "web.cors"),
+        ("web-cors-wildcard-credentials", "web.cors"),
+        ("web-cors-duplicate", "web.cors"),
+        ("web-cors-malformed", "web.cors"),
+        ("web-cors-no-vary", "web.cors"),
+    ],
+)
+def test_response_security_contract_detects_declared_failures(scenario, code, monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server(scenario) as (url, _):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 1, report.to_dict()
+    assert any(
+        check.code == code and check.outcome == "fail" for check in report.checks
+    )
+    serialized = json.dumps(report.to_dict())
+    assert RESPONSE_COOKIE not in serialized
+    assert TRUSTED_ORIGIN not in serialized
+    assert HOSTILE_ORIGIN not in serialized
+    assert "unsafe-url" not in serialized
+
+
+def test_public_cors_contract_can_explicitly_allow_noncredentialed_wildcard(monkeypatch):
+    _security_environment(monkeypatch)
+    data = secured_public_policy()
+    cors = data["api"]["public_resources"][0]["response_security"]["cors"]
+    cors.update(
+        allow_variants=["trusted-origin", "hostile-origin"],
+        deny_variants=[],
+        allow_credentials=False,
+        allow_wildcard=True,
+    )
+    with public_server("web-cors-wildcard") as (url, _):
+        data["api"]["base_url"] = url
+        report = Report()
+        check_api(Policy.model_validate(data).api, report)
+    assert report.exit_code == 0, report.to_dict()
+    cors_checks = [check for check in report.checks if check.code == "web.cors"]
+    assert len(cors_checks) == 2
+    assert all(check.outcome == "pass" for check in cors_checks)
+
+
+def test_cors_vary_wildcard_satisfies_cache_separation(monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server("web-cors-vary-star") as (url, _):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
+
+
+def test_unknown_cookie_flag_does_not_hide_declared_attributes(monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server("web-cookie-partitioned") as (url, _):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
+
+
+def test_response_security_finding_retests_with_the_same_header_controls(monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server("web-weak-hsts") as (url, requests):
+        config = Policy.model_validate(secured_public_policy(url)).api
+        original = Report()
+        check_api(config, original)
+        finding = next(
+            item for item in original.finding_groups() if item["code"] == "web.hsts"
+        )
+        requests.active_scenario = "web-safe"
+        requests.clear()
+        verdict, result = run_retest(
+            config,
+            original.to_dict(),
+            finding["finding_id"],
+            change_ref="deploy:web-response-security",
+        )
+    assert verdict == "fixed", result
+    assert len(requests) == 3
+    assert result["report"]["exit_code"] == 0
+
+
+def test_scan_attributes_response_security_failure_to_live_get_stage(tmp_path, monkeypatch):
+    _security_environment(monkeypatch)
+    with public_server("web-missing-nosniff") as (url, _):
+        report = Report()
+        run_scan(
+            Policy.model_validate(secured_public_policy(url)),
+            tmp_path,
+            report,
+        )
+    assert report.exit_code == 1
+    assert report.scan["stages"]["live_get_checks"]["status"] == "fail"
 
 
 @pytest.mark.parametrize(
@@ -179,6 +448,38 @@ def test_response_validation_is_stopped_by_total_budget(schema, body, monkeypatc
     assert report.evidence[next(iter(report.evidence))].observed == "unknown"
 
 
+def test_response_security_validation_is_stopped_by_total_budget(monkeypatch):
+    data = public_policy()
+    resource = data["api"]["public_resources"][0]
+    resource["variants"] = [{"name": "default"}]
+    resource["response_security"] = {
+        "security_headers": {"content_type_options": "nosniff"}
+    }
+    config = Policy.model_validate(data).api
+    config.validation_timeout_ms = 50
+
+    async def immediate_response(*_args, **_kwargs):
+        return 200, '{"state":"ready"}', {"Cache-Control": "no-store"}
+
+    def expensive_security_validation(*_args, **_kwargs):
+        while True:
+            pass
+
+    monkeypatch.setattr(api_module, "fetch", immediate_response)
+    monkeypatch.setattr(
+        public_module,
+        "response_security_results",
+        expensive_security_validation,
+    )
+    started = time.monotonic()
+    report = Report()
+    check_api(config, report)
+    assert time.monotonic() - started < 1
+    assert report.exit_code == 2
+    assert any(check.code == "data.validation_budget" for check in report.checks)
+    assert report.evidence[next(iter(report.evidence))].observed == "unknown"
+
+
 def test_public_latency_finding_retests_with_header_free_control(monkeypatch):
     monkeypatch.setenv("PP_ATTACKER_COOKIE", ATTACKER_COOKIE)
     with public_server("slow-cookie") as (url, requests):
@@ -213,6 +514,41 @@ def test_missing_variant_environment_value_sends_no_request(monkeypatch):
     with public_server() as (url, requests):
         report = Report()
         check_api(Policy.model_validate(public_policy(url)).api, report)
+    assert not requests
+    assert report.exit_code == 2
+    assert any(check.code == "public.configuration" for check in report.checks)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "",
+        "null",
+        "file://local",
+        "https://user@example.com",
+        "https://[",
+        "https://example.com:99999",
+        "https://example.com?",
+        "https://example.com#",
+    ],
+)
+def test_invalid_cors_origin_sends_no_request(value, monkeypatch):
+    monkeypatch.setenv("PP_TRUSTED_ORIGIN", value)
+    monkeypatch.setenv("PP_HOSTILE_ORIGIN", HOSTILE_ORIGIN)
+    with public_server("web-safe") as (url, requests):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
+    assert not requests
+    assert report.exit_code == 2
+    assert any(check.code == "public.configuration" for check in report.checks)
+
+
+def test_duplicate_cors_origins_send_no_request(monkeypatch):
+    monkeypatch.setenv("PP_TRUSTED_ORIGIN", TRUSTED_ORIGIN)
+    monkeypatch.setenv("PP_HOSTILE_ORIGIN", TRUSTED_ORIGIN)
+    with public_server("web-safe") as (url, requests):
+        report = Report()
+        check_api(Policy.model_validate(secured_public_policy(url)).api, report)
     assert not requests
     assert report.exit_code == 2
     assert any(check.code == "public.configuration" for check in report.checks)
@@ -255,6 +591,48 @@ def test_public_contract_rejects_unsafe_request_shapes(change):
         Policy.model_validate(data)
 
 
+@pytest.mark.parametrize(
+    "change",
+    [
+        lambda resource: resource.update(response_security={}),
+        lambda resource: resource["response_security"]["cors"].update(
+            allow_wildcard=True
+        ),
+        lambda resource: resource["response_security"]["cors"][
+            "deny_variants"
+        ].clear(),
+        lambda resource: resource["response_security"]["cors"][
+            "allow_variants"
+        ].append("default"),
+        lambda resource: resource["response_security"]["cookies"].append(
+            dict(resource["response_security"]["cookies"][0])
+        ),
+        lambda resource: resource["response_security"]["cookies"][0].update(
+            same_site=["none"], secure=None
+        ),
+        lambda resource: resource["response_security"]["cookies"][0].update(
+            host_only=None
+        ),
+        lambda resource: resource["response_security"]["security_headers"][
+            "content_security_policy"
+        ]["required_directives"].update({"Bad-Directive": ["'none'"]}),
+    ],
+)
+def test_response_security_rejects_ambiguous_contracts(change):
+    data = secured_public_policy()
+    resource = data["api"]["public_resources"][0]
+    change(resource)
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
+def test_response_security_is_digest_bound_without_changing_legacy_public_digest():
+    legacy = Policy.model_validate(public_policy()).api
+    secured = Policy.model_validate(secured_public_policy()).api
+    assert api_contract_digest(legacy) == LEGACY_PUBLIC_DIGEST
+    assert api_contract_digest(secured) != LEGACY_PUBLIC_DIGEST
+
+
 def test_public_latency_limit_cannot_exceed_transport_timeout():
     data = public_policy()
     data["api"]["public_resources"][0]["max_elapsed_ms"] = 1_001
@@ -276,3 +654,4 @@ def test_published_public_contract_example_matches_policy_schema():
     data = json.loads((root / "examples/public-contracts.json").read_text())
     policy = Policy.model_validate(data)
     assert len(policy.api.public_resources) == 2
+    assert policy.api.public_resources[0].response_security is not None

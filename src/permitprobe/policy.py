@@ -174,6 +174,143 @@ class RequestVariant(Strict):
         return self
 
 
+class HSTSContract(Strict):
+    min_max_age: int = Field(default=31_536_000, ge=0, le=63_072_000)
+    include_subdomains: bool = False
+    preload: bool = False
+
+    @model_validator(mode="after")
+    def valid(self):
+        if self.preload and (not self.include_subdomains or self.min_max_age < 31_536_000):
+            raise ValueError("HSTS preload requires one year and includeSubDomains")
+        return self
+
+
+class CSPContract(Strict):
+    required_directives: dict[str, list[str]] = Field(min_length=1, max_length=32)
+
+    @model_validator(mode="after")
+    def valid(self):
+        for name, values in self.required_directives.items():
+            if (
+                not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", name)
+                or len(values) > 32
+                or len(values) != len(set(values))
+                or any(
+                    not 1 <= len(value) <= 256
+                    or any(char.isspace() or char in ";," for char in value)
+                    or any(ord(char) < 33 or ord(char) > 126 for char in value)
+                    for value in values
+                )
+            ):
+                raise ValueError("CSP directives and source tokens must be safe and distinct")
+        return self
+
+
+class SecurityHeadersContract(Strict):
+    hsts: HSTSContract | None = None
+    content_type_options: Literal["nosniff"] | None = None
+    referrer_policy: list[
+        Literal[
+            "no-referrer",
+            "no-referrer-when-downgrade",
+            "origin",
+            "origin-when-cross-origin",
+            "same-origin",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "unsafe-url",
+        ]
+    ] = Field(default_factory=list, max_length=8)
+    frame_options: list[Literal["deny", "sameorigin"]] = Field(
+        default_factory=list, max_length=2
+    )
+    content_security_policy: CSPContract | None = None
+
+    @model_validator(mode="after")
+    def valid(self):
+        if (
+            self.hsts is None
+            and self.content_type_options is None
+            and not self.referrer_policy
+            and not self.frame_options
+            and self.content_security_policy is None
+        ):
+            raise ValueError("security_headers needs at least one declared response contract")
+        if len(self.referrer_policy) != len(set(self.referrer_policy)) or len(
+            self.frame_options
+        ) != len(set(self.frame_options)):
+            raise ValueError("accepted security header values must be distinct")
+        return self
+
+
+class ResponseCookieContract(Strict):
+    name: str = Field(min_length=1, max_length=128)
+    secure: bool | None = None
+    http_only: bool | None = None
+    same_site: list[Literal["strict", "lax", "none"]] = Field(
+        default_factory=list, max_length=3
+    )
+    host_only: bool | None = None
+    path: str | None = Field(default=None, min_length=1, max_length=256)
+
+    @model_validator(mode="after")
+    def valid(self):
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~A-Za-z0-9-]+", self.name):
+            raise ValueError("response cookie name must be an HTTP token")
+        if len(self.same_site) != len(set(self.same_site)):
+            raise ValueError("accepted SameSite values must be distinct")
+        if self.path is not None and (
+            not self.path.startswith("/")
+            or any(ord(char) < 32 or ord(char) > 126 or char == ";" for char in self.path)
+        ):
+            raise ValueError("cookie path must be a safe absolute path")
+        if "none" in self.same_site and self.secure is not True:
+            raise ValueError("SameSite=None requires an explicit Secure contract")
+        if self.name.startswith("__Host-") and (
+            self.secure is not True or self.host_only is not True or self.path != "/"
+        ):
+            raise ValueError("__Host- cookies require Secure, host-only, and Path=/")
+        if self.name.startswith("__Secure-") and self.secure is not True:
+            raise ValueError("__Secure- cookies require Secure")
+        return self
+
+
+class CORSContract(Strict):
+    allow_variants: list[str] = Field(default_factory=list, max_length=8)
+    deny_variants: list[str] = Field(default_factory=list, max_length=8)
+    allow_credentials: bool = False
+    allow_wildcard: bool = False
+    require_vary_origin: bool = True
+
+    @model_validator(mode="after")
+    def valid(self):
+        names = [*self.allow_variants, *self.deny_variants]
+        if (
+            not names
+            or len(names) != len(set(names))
+            or any(not re.fullmatch(NAME, name) for name in names)
+            or (self.allow_credentials and self.allow_wildcard)
+        ):
+            raise ValueError("CORS variants must be distinct and credentials cannot use wildcard")
+        return self
+
+
+class ResponseSecurityContract(Strict):
+    security_headers: SecurityHeadersContract | None = None
+    cookies: list[ResponseCookieContract] = Field(default_factory=list, max_length=16)
+    cors: CORSContract | None = None
+
+    @model_validator(mode="after")
+    def valid(self):
+        if self.security_headers is None and not self.cookies and self.cors is None:
+            raise ValueError("response_security needs headers, cookies, or CORS")
+        names = [cookie.name for cookie in self.cookies]
+        if len(names) != len(set(names)):
+            raise ValueError("response cookie contracts must have distinct names")
+        return self
+
+
 class PublicResource(Strict):
     name: str = Field(pattern=NAME)
     path: str = Field(min_length=1, max_length=512)
@@ -188,6 +325,7 @@ class PublicResource(Strict):
     max_elapsed_ms: int = Field(default=5_000, ge=1, le=30_000)
     cache: Literal["no-store"] | None = None
     response_schema: dict | None = None
+    response_security: ResponseSecurityContract | None = None
 
     @model_validator(mode="after")
     def valid(self):
@@ -195,6 +333,16 @@ class PublicResource(Strict):
             raise ValueError("public resource paths cannot contain placeholders")
         if len({variant.name for variant in self.variants}) != len(self.variants):
             raise ValueError("public request variant names must be distinct")
+        if self.response_security and self.response_security.cors:
+            cors = self.response_security.cors
+            configured = {*cors.allow_variants, *cors.deny_variants}
+            origin_variants = {
+                variant.name
+                for variant in self.variants
+                if "origin" in {name.lower() for name in variant.header_envs}
+            }
+            if configured != origin_variants:
+                raise ValueError("CORS must classify every and only Origin request variant")
         if (
             len(set(self.expected_statuses)) != len(self.expected_statuses)
             or any(status < 200 or status > 599 for status in self.expected_statuses)
@@ -353,7 +501,7 @@ class API(Strict):
     # protected primary object whose successful self-case proves the fixture.
     linked_resources: list[LinkedResource] = Field(default_factory=list, max_length=32)
     # Anonymous GET contracts are independent of the authorization matrix. They
-    # cover public response integrity, cache behavior and fail-fast latency.
+    # cover response integrity, browser-facing security, cache behavior and latency.
     public_resources: list[PublicResource] = Field(default_factory=list, max_length=32)
     # Additional fully contracted surfaces authorized for the active explorer.
     # Ordinary `check` ignores them; `explore` exposes them as bounded capabilities.
@@ -475,7 +623,12 @@ def api_contract_digest(
         contract.pop(operational, None)
     if not include_exploration:
         contract.pop("exploration_resources", None)
-    if not include_public or not contract.get("public_resources"):
+    if include_public and contract.get("public_resources"):
+        for item, resource in zip(contract["public_resources"], config.public_resources):
+            if resource.response_security is None:
+                # Preserve digests from policies written before response security contracts.
+                item.pop("response_security", None)
+    else:
         contract.pop("public_resources", None)
     if include_linked and contract.get("linked_resources"):
         for item, linked in zip(contract["linked_resources"], config.linked_resources):

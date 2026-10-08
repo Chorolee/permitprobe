@@ -138,7 +138,8 @@ The stages run in one bounded assessment:
 2. Inspect explicitly selected AI-handoff text when the policy declares it.
 3. Read the fixed anonymous discovery sources when `api.discovery` is declared and propose
    same-origin paths that lack a check contract.
-4. Execute the declared authorization, public response, cache and latency GET checks.
+4. Execute the declared authorization, public response, browser-security, cache and latency GET
+   checks.
 5. Probe declared linked edge/storage reads without cross-origin credential forwarding or consuming
    response bodies.
 6. Classify exact reviewed findings through the optional baseline.
@@ -237,7 +238,8 @@ Each `public_resources` entry declares:
 - `active` or `retired` lifecycle metadata;
 - one or more expected final HTTP statuses;
 - an absolute `max_elapsed_ms` fail-fast limit;
-- an optional inline JSON response schema and strict `no-store` cache contract; and
+- an optional inline JSON response schema and strict `no-store` cache contract;
+- optional declared browser-facing response security; and
 - named request variants whose header values come from environment references.
 
 ```json
@@ -271,6 +273,66 @@ and cannot be greater than the API-level `timeout_seconds` value.
 Reports retain the measured milliseconds but omit URLs, query values, header values, and
 response bodies. A public finding can be passed to `permitprobe retest`; the retest adds a
 header-free variant for the same resource when one is declared.
+
+### Browser-facing response security (unreleased)
+
+`response_security` extends an existing public GET contract without adding requests beyond its
+declared variants. It can require HSTS age/directives, `nosniff`, accepted Referrer-Policy and
+X-Frame-Options values, and selected CSP directives with stable source tokens:
+
+```json
+{
+  "response_security": {
+    "security_headers": {
+      "hsts": {"min_max_age": 31536000, "include_subdomains": true},
+      "content_type_options": "nosniff",
+      "referrer_policy": ["strict-origin-when-cross-origin", "no-referrer"],
+      "frame_options": ["deny"],
+      "content_security_policy": {
+        "required_directives": {
+          "default-src": ["'none'"],
+          "frame-ancestors": ["'none'"]
+        }
+      }
+    }
+  }
+}
+```
+
+Header checks require one unambiguous field value. Missing, duplicated, malformed or weaker values
+fail the declared contract. Each configured CSP directive must have exactly the declared token set;
+undeclared directives are not graded. The check does not execute a browser. HSTS has browser effect
+only over HTTPS, even though the synthetic loopback fixtures can exercise its parser over HTTP.
+
+Declared response cookies are matched by exact cookie name. Each contract can require `Secure`,
+`HttpOnly`, accepted `SameSite` values, host-only scope and an exact Path. Duplicate matching
+cookies fail. `__Host-` and `__Secure-` declarations must include their prefix requirements:
+
+```json
+{
+  "cookies": [
+    {
+      "name": "__Host-session",
+      "secure": true,
+      "http_only": true,
+      "same_site": ["strict", "lax"],
+      "host_only": true,
+      "path": "/"
+    }
+  ]
+}
+```
+
+CORS uses existing environment-backed `Origin` request variants. A contract must classify every
+and only variant that sends a distinct Origin as allowed or denied. Allowed credentialed responses
+require an exact matching origin and, by default, `Vary: Origin`; wildcard with credentials is invalid.
+Noncredentialed wildcard access must be opted into explicitly. Denied variants fail if the response
+reflects their origin or grants wildcard access. PermitProbe sends no OPTIONS preflight request.
+
+Observed header values, Origin values, cookie values and cookie names stay out of reports. Reports
+contain only the resource/variant target, normalized evidence ID and the configured check code.
+These checks run only after an expected response status and participate in `scan`, baselines and
+finding retests.
 
 ## Private collections
 
@@ -686,6 +748,8 @@ total deadline.
   source identities on the exact primary origin. They do not validate returned body identity,
   signed-token cryptography or expiry, enumerate a bucket, use a storage service credential, or
   infer access rules for undeclared objects.
+- Browser-facing response checks validate declared HTTP fields only. They do not execute CSP in a
+  browser, prove that an application is free of XSS/CSRF, or exercise CORS preflight behavior.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
   archive scanning, prompt-injection prevention, continuous DLP, or runtime egress enforcement.
 - Policy files, schemas, installed dependencies, scanner and exploration-provider executables
