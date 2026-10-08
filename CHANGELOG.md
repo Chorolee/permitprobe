@@ -7,6 +7,8 @@ while it is in the `0.x` development series.
 
 ### Added
 
+- A maintained threat model records credentials, DNS/TLS, provider process authority, local
+  artifact assumptions, supply-chain controls, and fail-closed result semantics.
 - Public GET resources can declare browser-facing response contracts for HSTS, CSP,
   `X-Content-Type-Options`, Referrer-Policy, X-Frame-Options, response-cookie attributes and CORS
   behavior without retaining observed header, Origin or cookie values.

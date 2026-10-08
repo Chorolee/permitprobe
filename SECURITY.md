@@ -11,9 +11,10 @@ vulnerability). If that channel is unavailable, contact the maintainer on GitHub
 private report before sharing sensitive details.
 Do not include real credentials, response bodies, or customer data in public issues.
 
-The threat model and current coverage limits are in the README. A passing check applies
-only to configured cases and captured files; it does not certify a service or authorize
-an external transfer. Test only systems you operate or are authorized to test.
+The detailed [threat model](docs/threat-model.md) and current coverage limits in the README define
+the implemented boundary. A passing check applies only to configured cases and captured files; it
+does not certify a service or authorize an external transfer. Test only systems you operate or are
+authorized to test.
 
 Sensitive handling rules:
 
