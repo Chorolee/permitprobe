@@ -4,8 +4,8 @@
 
 Open-source defensive security CLI for testing API authorization, response-data boundaries, and AI handoff exposure.
 
-Maintainer: Susan (@Chorolee)<br>
-Security Maintainer: Susan (@Chorolee)<br>
+Maintainer: [@Chorolee](https://github.com/Chorolee)<br>
+Security Maintainer: [@Chorolee](https://github.com/Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
 License: Apache-2.0<br>

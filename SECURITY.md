@@ -1,6 +1,6 @@
 # Security policy
 
-Security Maintainer: Susan (@Chorolee)
+Security Maintainer: [@Chorolee](https://github.com/Chorolee)
 
 Responsible for vulnerability triage, security fixes, private vulnerability reports, and coordinated disclosure for PermitProbe.
 
