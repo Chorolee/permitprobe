@@ -324,6 +324,19 @@ def test_missing_scanner_is_inconclusive(tmp_path):
     assert report.exit_code == 2
 
 
+def test_forged_scanner_version_is_rejected_before_execution(tmp_path):
+    marker = tmp_path / "executed"
+    fake = tmp_path / "gitleaks"
+    fake.write_text(f"#!/bin/sh\ntouch '{marker}'\nprintf '8.30.1\\n'\n")
+    fake.chmod(0o755)
+    (tmp_path / "review.txt").write_text("Normal review.")
+    report = Report()
+    check_handoff(handoff(), tmp_path, report, str(fake))
+    assert report.exit_code == 2
+    assert not marker.exists()
+    assert any(c.code == "handoff.scanner" for c in report.checks)
+
+
 def test_gitleaks_real_detection_and_comment_cannot_suppress(tmp_path, scanner):
     fake = "ghp_" + "7Qx4Kp9Vn2Ms8Rt6Wj3Yz5Bc1Df0Ha9Lu4Se"
     (tmp_path / "review.txt").write_text(f"token = '{fake}' # gitleaks:allow\n")

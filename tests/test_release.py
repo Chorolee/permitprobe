@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 from permitprobe import __version__
+from permitprobe.handoff import GITLEAKS_BINARIES
 
 VERSION = __version__
 
@@ -175,7 +176,6 @@ def test_dependency_installation_is_complete_and_hash_locked():
             line.startswith(name + "==") and '; python_version < "3.12"' in line
             for line in lines
         )
-
     ci = (root / ".github" / "workflows" / "ci.yml").read_text()
     publish = (root / ".github" / "workflows" / "publish-pypi.yml").read_text()
     assert "--require-hashes\n          --only-binary=:all:\n          -r requirements.lock" in ci
@@ -185,6 +185,10 @@ def test_dependency_installation_is_complete_and_hash_locked():
         "--require-hashes\n          --only-binary=:all:\n          -r verifier/requirements.lock"
         in publish
     )
+
+
+def test_installer_and_runtime_pin_the_same_scanner_binaries():
+    assert installer_module.BINARY_HASHES == GITLEAKS_BINARIES
 
 
 def test_publication_executes_only_the_main_branch_verifier():
