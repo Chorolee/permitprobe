@@ -5,7 +5,6 @@ providers, MCP commands, waivers, or raw upstream reports are executed/written.
 """
 
 import asyncio
-import json
 import os
 import re
 from dataclasses import dataclass
@@ -14,18 +13,19 @@ from time import monotonic
 from typing import Callable
 
 import httpx
-from jsonschema import Draft202012Validator
 from overstep.classifier import classify
 from overstep.matrix import Matrix
 from overstep.models import Effect, Observation, RunResult, TestCase
 from overstep.planner import plan
 
-from permitprobe.policy import API, ID_VALUE, _unique, api_contract_digest
+from permitprobe.policy import API, ID_VALUE, api_contract_digest
 from permitprobe.report import Evidence, Report
 from permitprobe.response_contracts import private_cache_matches, redirect_matches
 from permitprobe.validation import (
     ValidationBudgetExceeded,
     ValidationLimiter,
+    exact_json_loads,
+    exact_validator,
     schema_errors,
 )
 
@@ -318,12 +318,12 @@ def prepare_api(
     resources = {resource.name: resource for resource in selected_resources}
     subjects = {s.name: s for s in config.subjects}
     validators = {
-        resource.name: Draft202012Validator(resource.response_schema)
+        resource.name: exact_validator(resource.response_schema)
         for resource in selected_resources
         if not resource.redirect
     }
     denial_validators = {
-        resource.name: Draft202012Validator(resource.denial_schema)
+        resource.name: exact_validator(resource.denial_schema)
         for resource in selected_resources
     }
     report.policy_digest = api_contract_digest(
@@ -518,11 +518,7 @@ def execute_api_cases(
             with validation_limiter.run(
                 max_seconds=None if deadline is None else deadline - clock()
             ):
-                data = json.loads(
-                    text,
-                    object_pairs_hook=_unique,
-                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
-                )
+                data = exact_json_loads(text)
                 validator = (
                     prepared.validators if effect == Effect.ALLOW else prepared.denial_validators
                 )[case.resource]

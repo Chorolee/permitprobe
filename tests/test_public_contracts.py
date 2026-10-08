@@ -149,7 +149,11 @@ def public_server(scenario="safe"):
                 if active_scenario == "bad-schema"
                 else {"state": "ready"}
             )
-            raw = json.dumps(body).encode()
+            raw = (
+                b'{"state":"ready","sequence":9007199254740993.0}'
+                if active_scenario == "rounded-number"
+                else json.dumps(body).encode()
+            )
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header(
@@ -525,6 +529,23 @@ def test_public_contract_fails_closed_on_status_schema_and_cache(scenario, code,
         check_api(Policy.model_validate(public_policy(url)).api, report)
     assert report.exit_code == 1, report.to_dict()
     assert any(check.code == code and check.outcome == "fail" for check in report.checks)
+
+
+def test_public_schema_cannot_pass_a_number_rounded_to_another_integer(monkeypatch):
+    monkeypatch.setenv("PP_ATTACKER_COOKIE", ATTACKER_COOKIE)
+    data = public_policy()
+    schema = data["api"]["public_resources"][0]["response_schema"]
+    schema["required"].append("sequence")
+    schema["properties"]["sequence"] = {"const": 9007199254740992}
+    with public_server("rounded-number") as (url, _):
+        data["api"]["base_url"] = url
+        report = Report()
+        check_api(Policy.model_validate(data).api, report)
+    assert report.exit_code == 1, report.to_dict()
+    assert any(
+        check.code == "data.schema" and check.outcome == "fail"
+        for check in report.checks
+    )
 
 
 @pytest.mark.parametrize(
