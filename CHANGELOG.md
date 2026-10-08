@@ -24,6 +24,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- Prior reports used for baselines, replay creation and finding retests now reject duplicate JSON
+  keys, non-finite numbers and invalid Unicode before they can influence a verdict or request.
 - CORS response checks now apply Fetch's byte-exact serialized Origin and case-sensitive
   credentials literal rules instead of accepting normalized lookalikes that browsers reject.
 - Local security artifacts are published complete with owner-only permissions, independently of

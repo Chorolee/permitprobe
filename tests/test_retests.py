@@ -297,6 +297,30 @@ def test_malformed_prior_report_is_rejected_as_policy_error(tmp_path):
         load_prior_report(malformed)
 
 
+def test_prior_report_loader_rejects_ambiguous_nonstandard_json(tmp_path):
+    prior, _ = prior_selective_finding()
+    serialized = json.dumps(prior)
+    cases = [
+        serialized.replace(
+            '"schema_version": 2', '"schema_version": 2, "schema_version": 2', 1
+        ),
+        serialized[:-1] + ', "nonfinite": NaN}',
+        serialized[:-1] + ', "surrogate": "\\ud800"}',
+    ]
+    for index, raw in enumerate(cases):
+        path = tmp_path / f"ambiguous-{index}.json"
+        path.write_text(raw)
+        with pytest.raises(PolicyError, match="compatible prior"):
+            load_prior_report(path)
+
+
+def test_in_memory_prior_report_rejects_nonfinite_values_before_delivery():
+    prior, finding_id = prior_selective_finding()
+    prior["nonfinite"] = float("nan")
+    with pytest.raises(PolicyError, match="compatible prior"):
+        run_retest(Policy.model_validate(read_policy()).api, prior, finding_id)
+
+
 def test_prior_report_may_contain_a_nonexecutable_grouped_finding(tmp_path):
     prior, _ = prior_selective_finding()
     auxiliary = Report(policy_digest=prior["policy_digest"])

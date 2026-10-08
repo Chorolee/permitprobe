@@ -23,7 +23,7 @@ from permitprobe.linked import (
     prepare_linked,
     source_control_cases,
 )
-from permitprobe.policy import API, PolicyError, api_contract_digest
+from permitprobe.policy import API, PolicyError, _unique, api_contract_digest
 from permitprobe.public_contracts import (
     execute_public_cases,
     prepare_public,
@@ -41,18 +41,26 @@ def load_prior_report(path: Path) -> dict:
             raw = handle.read(MAX_PRIOR_REPORT_BYTES + 1)
         if len(raw) > MAX_PRIOR_REPORT_BYTES:
             raise ValueError
-        data = json.loads(raw)
+        data = json.loads(
+            raw,
+            object_pairs_hook=_unique,
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
+        )
         return _validate_prior_report(data)
-    except (OSError, ValueError, RecursionError):
+    except (OSError, ValueError, RecursionError, UnicodeError):
         raise PolicyError("cannot read a compatible prior PermitProbe report") from None
 
 
 def _validate_prior_report(data) -> dict:
     try:
         canonical = json.dumps(
-            data, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-        ).encode()
-    except (TypeError, ValueError, RecursionError):
+            data,
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError, RecursionError, UnicodeError):
         raise ValueError from None
     if (
         len(canonical) > MAX_PRIOR_REPORT_BYTES
