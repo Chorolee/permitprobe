@@ -2,7 +2,8 @@
 
 Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 
-- Keep policy parsing strict and report exit codes 0/pass, 1/violation, 2/inconclusive.
+- Keep policy parsing strict and report exit codes 0/pass-or-reviewed-known,
+  1/new violation, 2/inconclusive.
 - Unknown outcomes and failed positive controls must never produce a clean run.
 - Reports contain labels and findings, not credentials, response bodies or scanned text.
 - The library reuses Overstep and Gitleaks; do not silently widen their execution scope.
@@ -15,3 +16,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.
+- Known-finding baselines must keep failure checks visible, match exact code/target pairs,
+  and never turn incomplete evidence, handoff failures or latency failures into a clean run.

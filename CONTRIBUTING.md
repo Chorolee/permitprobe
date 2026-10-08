@@ -11,6 +11,8 @@ Exploration changes must remain model-neutral, use scripted fake providers in te
 that unknown cases, broken provider output, failed controls and partial coverage cannot pass.
 OpenAPI inventory changes must remain offline: use synthetic local documents in tests, never
 fetch schema references, and never convert a discovered operation into an executable request.
+Baseline changes must prove that new targets still fail, expired entries resurface, unobserved
+entries are retained, and any inconclusive check keeps exit code `2`.
 
 The public contract is the policy schema, CLI, report schema, exit-code semantics, and
 checked-bundle manifest. Change them deliberately and update examples and tests together.

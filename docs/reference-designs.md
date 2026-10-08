@@ -35,6 +35,10 @@ endorsement, or a security assessment of those projects.
 - Nuclei's declarative and validation-first model reinforces PermitProbe's strict policy
   parser: unknown fields fail, request capabilities are compiled by the core, and external
   providers cannot invent target requests.
+- Schemathesis's [baseline separation](https://github.com/schemathesis/schemathesis/blob/f15d63c7e54e43404fb339eaf4d2b1d81fadc50b/docs/guides/baseline.md)
+  informed PermitProbe's explicit known-finding files. PermitProbe keeps normalized failures
+  visible, gates only exact code/target matches, retains unobserved entries, and lets incomplete
+  evidence override every baseline match.
 
 ### Deliberately excluded
 
@@ -49,12 +53,10 @@ endorsement, or a security assessment of those projects.
 
 ## Next candidates
 
-1. A known-finding baseline that can distinguish existing findings from regressions without
-   hiding inconclusive evidence, following Schemathesis's baseline separation.
-2. A sanitized replay bundle containing normalized case IDs and policy digests rather than
+1. A sanitized replay bundle containing normalized case IDs and policy digests rather than
    raw requests, following RESTler's reproducibility goal while preserving PermitProbe's
    credential and response-body boundary.
-3. Policy provenance or signatures if third-party policy distribution is introduced,
+2. Policy provenance or signatures if third-party policy distribution is introduced,
    following Nuclei's signed-template trust boundary.
-4. Explicit staged automation plans only after each stage has independent budgets and outcome
+3. Explicit staged automation plans only after each stage has independent budgets and outcome
    tests, following ZAP's job/test separation.
