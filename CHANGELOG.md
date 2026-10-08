@@ -9,6 +9,8 @@ while it is in the `0.x` development series.
 
 - Public maintainer attribution uses the GitHub handle `@Chorolee` only. Package metadata contains
   no maintainer email address.
+- GitHub now runs pinned Python CodeQL and pull-request dependency review, with weekly grouped
+  Dependabot updates for Python packages and GitHub Actions.
 
 ## [0.3.0] - 2026-10-09
 
