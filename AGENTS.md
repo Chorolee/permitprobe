@@ -13,3 +13,5 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Keep examples, README and the generated policy schema synchronized.
 - Do not commit environments, generated reports, archives, private data or scanner binaries.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
+- OpenAPI inventory is offline and local-file-only. Discovered operations never grant
+  execution authority; only explicit PermitProbe resources may produce GET requests.

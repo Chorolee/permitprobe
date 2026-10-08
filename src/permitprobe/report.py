@@ -41,6 +41,7 @@ class Report:
     planned_cases: dict[str, dict] = field(default_factory=dict)
     evidence: dict[str, Evidence] = field(default_factory=dict)
     exploration: dict | None = None
+    inventory: dict | None = None
 
     def add(
         self,
@@ -125,5 +126,6 @@ class Report:
             "evidence": [asdict(self.evidence[key]) for key in self.planned_cases if key in observed],
             "findings": self.finding_groups(),
             "exploration": self.exploration,
+            "inventory": self.inventory,
             "checks": [asdict(c) for c in self.checks],
         }
