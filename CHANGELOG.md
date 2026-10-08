@@ -3,7 +3,7 @@
 All notable changes to PermitProbe are recorded here. The project uses semantic versioning
 while it is in the `0.x` development series.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-10-08
 
 ### Added
 

@@ -24,8 +24,7 @@ Public documentation is in English. Contributions are provided under Apache-2.0.
 
 ## Preparing a release
 
-`main` currently carries development version 0.2.0; v0.1.1 remains the published release until
-the v0.2.0 tag and assets exist. A release commit must use the same stable version in
+The release commit must use the same stable version in
 `pyproject.toml`, `permitprobe.__version__`, the changelog, release notes and publishing-workflow
 default.
 
@@ -44,16 +43,15 @@ python scripts/smoke_wheel.py \
 
 The smoke test creates a new virtual environment outside the source tree, installs the wheel and
 its constrained dependencies, then runs the installed version command, policy-schema generator
-and safe loopback demo. Before tagging, replace `Unreleased` with the release date in
-`CHANGELOG.md`, change the README and security policy from development to published status, and
-rerun the checks above. Create an annotated tag from that exact commit, build the two distributions
-from the tag, and attach only the wheel and source archive to the matching non-prerelease GitHub
-Release. Do not rebuild between GitHub publication and registry publication.
+and safe loopback demo. Before tagging a release, replace `Unreleased` with the release date in
+`CHANGELOG.md`, change the README and security policy to the new published line, and rerun the
+checks above. Create an annotated tag from that exact commit, build the two distributions from the
+tag, and attach only the wheel and source archive to the matching non-prerelease GitHub Release.
+Do not rebuild between GitHub publication and registry publication.
 
 ## Publishing a verified GitHub release to PyPI
 
-PermitProbe v0.1.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.1.1/);
-v0.2.0 is prepared in source but is not published yet.
+PermitProbe v0.2.0 is [published on PyPI](https://pypi.org/project/permitprobe/0.2.0/).
 The maintainer's GitHub Trusted Publisher is configured; subsequent releases can
 use the same workflow without creating another pending publisher.
 
