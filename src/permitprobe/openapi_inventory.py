@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from permitprobe.local_files import read_bounded_regular
 from permitprobe.policy import API, PolicyError, _unique, api_contract_digest, origin_key
@@ -14,6 +15,14 @@ MAX_OPENAPI_BYTES = 5_000_000
 HTTP_METHODS = ("get", "put", "post", "delete", "options", "head", "patch", "trace")
 OPENAPI_VERSION = re.compile(r"^3\.[0-2]\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$")
 PATH_PARAMETER = re.compile(r"\{[A-Za-z_][A-Za-z0-9_.-]*\}")
+HTTP_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+OAUTH_FLOW_URLS = {
+    "implicit": ("authorizationUrl",),
+    "password": ("tokenUrl",),
+    "clientCredentials": ("tokenUrl",),
+    "authorizationCode": ("authorizationUrl", "tokenUrl"),
+    "deviceAuthorization": ("deviceAuthorizationUrl", "tokenUrl"),
+}
 
 
 @dataclass(frozen=True)
@@ -118,6 +127,114 @@ def _parameters(document: dict, path_item: dict, operation: dict) -> frozenset[s
     )
 
 
+def _https_url(value) -> bool:
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 2_048
+        or any(ord(char) < 33 or ord(char) > 126 for char in value)
+        or "\\" in value
+    ):
+        return False
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+        and not parsed.fragment
+        and port != 0
+    )
+
+
+def _scope_map(value) -> bool:
+    return (
+        isinstance(value, dict)
+        and len(value) <= 256
+        and all(
+            isinstance(name, str)
+            and 1 <= len(name) <= 512
+            and all(ord(char) >= 32 for char in name)
+            and isinstance(description, str)
+            and len(description) <= 4_096
+            and all(ord(char) >= 32 or char in "\t\n\r" for char in description)
+            for name, description in value.items()
+        )
+    )
+
+
+def _oauth_flow(name: str, value) -> bool:
+    if not isinstance(value, dict) or not _scope_map(value.get("scopes")):
+        return False
+    if any(not _https_url(value.get(field)) for field in OAUTH_FLOW_URLS[name]):
+        return False
+    refresh_url = value.get("refreshUrl")
+    return refresh_url is None or _https_url(refresh_url)
+
+
+def _security_scheme(document: dict, value) -> bool:
+    if not isinstance(value, dict) or "$ref" in value:
+        return False
+    kind = value.get("type")
+    description = value.get("description")
+    deprecated = value.get("deprecated")
+    if (
+        not isinstance(kind, str)
+        or kind not in {"apiKey", "http", "mutualTLS", "oauth2", "openIdConnect"}
+        or (description is not None and not isinstance(description, str))
+        or (deprecated is not None and type(deprecated) is not bool)
+    ):
+        return False
+    if kind == "apiKey":
+        name = value.get("name")
+        return (
+            isinstance(name, str)
+            and 1 <= len(name) <= 128
+            and all(32 <= ord(char) <= 126 for char in name)
+            and value.get("in") in {"query", "header", "cookie"}
+        )
+    if kind == "http":
+        scheme = value.get("scheme")
+        bearer_format = value.get("bearerFormat")
+        return (
+            isinstance(scheme, str)
+            and len(scheme) <= 128
+            and HTTP_TOKEN.fullmatch(scheme) is not None
+            and (bearer_format is None or isinstance(bearer_format, str))
+        )
+    if kind == "mutualTLS":
+        return not document["openapi"].startswith("3.0.")
+    if kind == "oauth2":
+        flows = value.get("flows")
+        supported = set(OAUTH_FLOW_URLS)
+        if not document["openapi"].startswith("3.2."):
+            supported.remove("deviceAuthorization")
+        metadata_url = value.get("oauth2MetadataUrl")
+        return (
+            isinstance(flows, dict)
+            and 1 <= len(flows) <= len(supported)
+            and set(flows) <= supported
+            and all(_oauth_flow(name, flow) for name, flow in flows.items())
+            and (metadata_url is None or _https_url(metadata_url))
+        )
+    url = value.get("openIdConnectUrl")
+    return _https_url(url)
+
+
+def _declares_oauth_scopes(scheme: dict, required: list[str]) -> bool:
+    if scheme["type"] != "oauth2":
+        return True
+    declared = {
+        scope
+        for flow in scheme["flows"].values()
+        for scope in flow["scopes"]
+    }
+    return set(required) <= declared
+
+
 def _access(document: dict, operation: dict) -> str:
     security = operation.get("security", document.get("security", []))
     if not isinstance(security, list) or len(security) > 64:
@@ -138,11 +255,22 @@ def _access(document: dict, operation: dict) -> str:
             or not 1 <= len(name) <= 128
             or not isinstance(scopes, list)
             or len(scopes) > 256
-            or any(not isinstance(scope, str) for scope in scopes)
+            or any(
+                not isinstance(scope, str)
+                or not 1 <= len(scope) <= 512
+                or any(ord(char) < 32 for char in scope)
+                for scope in scopes
+            )
+            or len(scopes) != len(set(scopes))
             for name, scopes in requirement.items()
         ):
             raise PolicyError("invalid OpenAPI security requirement")
-        if not isinstance(schemes, dict) or any(name not in schemes for name in requirement):
+        if not isinstance(schemes, dict) or any(
+            name not in schemes
+            or not _security_scheme(document, schemes[name])
+            or not _declares_oauth_scopes(schemes[name], scopes)
+            for name, scopes in requirement.items()
+        ):
             raise PolicyError("OpenAPI security requirement references an unknown scheme")
     return "public" if public_alternative else "protected"
 

@@ -28,6 +28,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- OpenAPI inventory now validates referenced security-scheme objects, required OAuth scopes and
+  HTTPS flow endpoints, rejecting incomplete schemes before reporting protected-route coverage.
 - API response validation now preserves exact decimal numbers so large or high-precision values
   cannot pass a different numeric schema constraint after binary floating-point rounding.
 - Policy JSON now preserves exact decimal schema values and rejects invalid Unicode or excessive

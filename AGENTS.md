@@ -46,6 +46,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.
+- Validate every referenced OpenAPI security scheme's inline type and required structural fields;
+  never classify an empty, referenced or unsupported scheme as protected coverage.
 - Known-finding baselines must keep failure checks visible, match exact code/target pairs,
   bind to the normalized target origin, and never turn incomplete evidence, discovery gaps,
   handoff failures or latency failures into a clean run.
