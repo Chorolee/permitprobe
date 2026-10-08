@@ -696,6 +696,8 @@ path traversal, cross-platform case or Unicode path collisions, and configured s
 User deny patterns win over allow patterns;
 neither can override the built-in exclusions. Glob patterns match the whole POSIX path,
 and `*` can cross directory separators. Include specific files rather than a broad `*`.
+The handoff root must be a canonical relative directory beside the real policy file. Absolute or
+parent-traversing roots and any symlinked root component are refused.
 
 Scanner configuration and inline `gitleaks:allow` comments in a payload cannot suppress
 the scan. Gitleaks runs with a small explicit environment, without inherited credentials

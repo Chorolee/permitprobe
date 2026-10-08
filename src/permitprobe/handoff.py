@@ -63,10 +63,15 @@ def _canonical_handoff_path(name: str) -> bool:
     )
 
 
+def _has_private_directory(parts: tuple[str, ...]) -> bool:
+    return any(part.casefold() in PRIVATE_DIRS for part in parts)
+
+
 def _denied(name: str, policy: Handoff) -> bool:
-    parts = PurePosixPath(name).parts
-    lowered = [p.lower() for p in parts]
-    if any(p in PRIVATE_DIRS for p in lowered):
+    root_parts = () if policy.root == "." else PurePosixPath(policy.root).parts
+    parts = (*root_parts, *PurePosixPath(name).parts)
+    lowered = [part.casefold() for part in parts]
+    if _has_private_directory(parts):
         return True
     leaf = lowered[-1]
     if (
@@ -107,12 +112,40 @@ def _read_under(root_fd: int, parts: tuple[str, ...], limit: int) -> bytes:
         os.close(current)
 
 
+def _open_root(policy_dir: Path, root: str) -> int:
+    """Open a relative root one directory component at a time without following links."""
+
+    current = os.open(policy_dir, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        if root != ".":
+            for part in PurePosixPath(root).parts:
+                child = os.open(
+                    part,
+                    os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                    dir_fd=current,
+                )
+                os.close(current)
+                current = child
+        return current
+    except OSError:
+        os.close(current)
+        raise
+
+
 def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, bytes]:
     snapshot = {}
     total = 0
-    root = policy_dir / policy.root
+    root_parts = () if policy.root == "." else PurePosixPath(policy.root).parts
+    if _has_private_directory(root_parts):
+        report.add(
+            "handoff.policy",
+            "fail",
+            "handoff",
+            "Handoff root is a built-in private directory.",
+        )
+        return snapshot
     try:
-        fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        fd = _open_root(policy_dir, policy.root)
     except OSError:
         report.add("handoff.root", "inconclusive", "handoff", "Cannot open handoff directory.")
         return snapshot

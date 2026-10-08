@@ -275,7 +275,9 @@ def main(argv: list[str] | None = None) -> int:
                     f"{len(manifest.baseline_case_ids)} deterministic baseline cases"
                 )
             return 0
-        policy = load_policy(args.policy)
+        policy_path = args.policy.resolve(strict=True)
+        policy = load_policy(policy_path)
+        policy_dir = policy_path.parent
         if args.command == "replay":
             if not policy.api:
                 raise PolicyError("replay needs an API policy")
@@ -350,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
             report = Report(policy_digest=known.policy_digest if known else None)
             run_scan(
                 policy,
-                args.policy.parent,
+                policy_dir,
                 report,
                 openapi=args.openapi,
                 gitleaks=args.gitleaks,
@@ -362,7 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check" and policy.api:
             check_api(policy.api, report)
         if policy.handoff:
-            snapshot = check_handoff(policy.handoff, args.policy.parent, report, args.gitleaks)
+            snapshot = check_handoff(policy.handoff, policy_dir, report, args.gitleaks)
         elif args.command == "bundle":
             raise PolicyError("policy has no handoff surface")
         if args.command == "bundle" and report.exit_code == 0:

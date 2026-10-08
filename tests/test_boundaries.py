@@ -309,7 +309,60 @@ def test_policy_rejects_invalid_unicode_and_extreme_decimal_exponents(tmp_path):
 
 
 def handoff(files=None, **kwargs):
-    return Handoff(root=".", files=files or ["review.txt"], allow=["*"], **kwargs)
+    root = kwargs.pop("root", ".")
+    return Handoff(root=root, files=files or ["review.txt"], allow=["*"], **kwargs)
+
+
+@pytest.mark.parametrize(
+    "root",
+    [
+        "/absolute/reviews",
+        "../reviews",
+        "reviews/../private",
+        "reviews//release",
+        "reviews\\release",
+        "C:/reviews",
+        "reviews/",
+        "reviews./release",
+        "reviews\N{RIGHT-TO-LEFT OVERRIDE}",
+    ],
+)
+def test_handoff_root_must_be_a_canonical_relative_directory(root):
+    with pytest.raises(ValidationError):
+        handoff(root=root)
+
+
+def test_nested_handoff_root_is_opened_without_following_components(tmp_path):
+    outside = tmp_path / "outside"
+    nested = outside / "nested"
+    nested.mkdir(parents=True)
+    (nested / "review.txt").write_text("Outside boundary")
+    policy_dir = tmp_path / "policy"
+    policy_dir.mkdir()
+    (policy_dir / "linked").symlink_to(outside, target_is_directory=True)
+    report = Report()
+    assert collect(handoff(root="linked/nested"), policy_dir, report) == {}
+    assert report.exit_code == 2
+
+
+def test_private_directory_cannot_be_selected_as_handoff_root(tmp_path):
+    private = tmp_path / ".git"
+    private.mkdir()
+    (private / "review.txt").write_text("Private repository state")
+    report = Report()
+    assert collect(handoff(root=".git"), tmp_path, report) == {}
+    assert report.exit_code == 1
+
+
+def test_regular_nested_handoff_root_is_captured(tmp_path):
+    nested = tmp_path / "reviews" / "release"
+    nested.mkdir(parents=True)
+    (nested / "review.txt").write_text("Reviewed text")
+    report = Report()
+    assert collect(handoff(root="reviews/release"), tmp_path, report) == {
+        "review.txt": b"Reviewed text"
+    }
+    assert report.exit_code == 0
 
 
 def test_checked_bundle_contains_only_scanned_bytes(tmp_path, scanner):
@@ -526,6 +579,32 @@ def test_cli_bundle_is_handoff_only(tmp_path, scanner, capsys):
     assert result["unconfigured_surfaces"] == ["api", "data"]
     assert (tmp_path / "result.zip").is_file()
     assert stat.S_IMODE((tmp_path / "result.zip").stat().st_mode) == 0o600
+
+
+def test_cli_resolves_policy_symlink_before_locating_handoff_root(tmp_path, scanner, capsys):
+    actual = tmp_path / "actual"
+    actual.mkdir()
+    policy = actual / "policy.json"
+    policy.write_text(json.dumps({"version": 1, "handoff": handoff().model_dump()}))
+    (actual / "review.txt").write_text("Bytes beside the real policy")
+    entry = tmp_path / "entry"
+    entry.mkdir()
+    linked_policy = entry / "policy.json"
+    linked_policy.symlink_to(policy)
+    output = tmp_path / "resolved.zip"
+    assert main(
+        [
+            "bundle",
+            str(linked_policy),
+            "--gitleaks",
+            scanner,
+            "--output",
+            str(output),
+        ]
+    ) == 0
+    with zipfile.ZipFile(output) as archive:
+        assert archive.read("review.txt") == b"Bytes beside the real policy"
+    assert "PASS" in capsys.readouterr().out
 
 
 def test_cli_cannot_export_failed_handoff(tmp_path, scanner, capsys):
