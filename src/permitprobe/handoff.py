@@ -56,6 +56,7 @@ WINDOWS_DEVICE_NAMES = {
     "lpt²",
     "lpt³",
 }
+WINDOWS_INVALID_NAME_CHARACTERS = frozenset('<>:"\\|?*')
 
 
 def _portable_path_key(name: str) -> str:
@@ -77,10 +78,9 @@ def _canonical_handoff_path(name: str) -> bool:
         path.is_absolute()
         or not path.parts
         or ".." in path.parts
-        or "\\" in name
         or str(path) != name
         or name.endswith("/")
-        or ":" in name
+        or any(char in WINDOWS_INVALID_NAME_CHARACTERS for char in name)
         or any(not char.isprintable() for char in name)
         or any(part.endswith((".", " ")) for part in path.parts)
         or _windows_device_path(path.parts)

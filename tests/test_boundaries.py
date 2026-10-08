@@ -422,6 +422,12 @@ def test_interrupted_bundle_never_publishes_partial_archive(tmp_path, monkeypatc
         ("CONOUT$.log",),
         ("COM\N{SUPERSCRIPT ONE}.txt",),
         ("LPT9 .txt",),
+        ("question?.txt",),
+        ("wild*.txt",),
+        ("less<than.txt",),
+        ("greater>than.txt",),
+        ('double"quote.txt',),
+        ("vertical|bar.txt",),
     ],
 )
 def test_nonportable_archive_paths_are_rejected(names, tmp_path):

@@ -49,6 +49,8 @@ while it is in the `0.x` development series.
   roots, private-directory roots and symlinked directory components are refused.
 - Checked bundle member paths now reject Windows device-name aliases, including names with an
   extension or legacy superscript digit, before creating an archive.
+- Checked bundle member paths now reject every Win32-reserved filename character before a POSIX
+  name can become an unextractable or differently interpreted Windows archive entry.
 - Response-cookie checks now reject insecure or valued `Partitioned` attributes and require the
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed

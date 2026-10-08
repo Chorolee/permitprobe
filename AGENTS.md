@@ -27,6 +27,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   the receipt name, so extraction cannot alias two separately checked entries.
 - Reject reserved device names in every bundle path component, including extension-bearing and
   superscript-digit Windows aliases; checked bytes must always extract as ordinary files.
+- Reject characters that Win32 reserves in every file or directory name before a checked bundle
+  can be published from a POSIX host.
 - Keep examples, README and the generated policy schema synchronized.
 - Keep `docs/threat-model.md` synchronized with every new executable input, credential path,
   parser, report field, artifact path, trust assumption, and failure-to-pass transition.
