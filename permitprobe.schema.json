@@ -956,6 +956,57 @@
             }
           ],
           "default": null
+        },
+        "cross_origin_opener_policy": {
+          "items": {
+            "enum": [
+              "same-origin",
+              "same-origin-allow-popups",
+              "noopener-allow-popups"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Cross Origin Opener Policy",
+          "type": "array"
+        },
+        "cross_origin_embedder_policy": {
+          "items": {
+            "enum": [
+              "require-corp",
+              "credentialless"
+            ],
+            "type": "string"
+          },
+          "maxItems": 2,
+          "title": "Cross Origin Embedder Policy",
+          "type": "array"
+        },
+        "cross_origin_resource_policy": {
+          "items": {
+            "enum": [
+              "same-origin",
+              "same-site",
+              "cross-origin"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Cross Origin Resource Policy",
+          "type": "array"
+        },
+        "origin_agent_cluster": {
+          "anyOf": [
+            {
+              "const": true,
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Origin Agent Cluster"
         }
       },
       "title": "SecurityHeadersContract",

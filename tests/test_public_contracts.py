@@ -91,6 +91,10 @@ def secured_public_policy(base_url="https://staging.example.invalid"):
                     "frame-ancestors": ["'none'"],
                 }
             },
+            "cross_origin_opener_policy": ["same-origin"],
+            "cross_origin_embedder_policy": ["require-corp"],
+            "cross_origin_resource_policy": ["same-origin"],
+            "origin_agent_cluster": True,
         },
         "cookies": [
             {
@@ -179,6 +183,30 @@ def public_server(scenario="safe"):
                     else "default-src 'none'; frame-ancestors 'none' https:"
                     if active_scenario == "web-broad-csp"
                     else "default-src 'none'; frame-ancestors 'none'; script-src 'self'",
+                )
+                self.send_header(
+                    "Cross-Origin-Opener-Policy",
+                    "unsafe-none"
+                    if active_scenario == "web-bad-coop"
+                    else 'same-origin; report-to="coop"'
+                    if active_scenario != "web-malformed-coop"
+                    else 'same-origin; report-to="unterminated',
+                )
+                self.send_header(
+                    "Cross-Origin-Embedder-Policy",
+                    "require-corp, require-corp"
+                    if active_scenario == "web-bad-coep"
+                    else 'require-corp;report-to="coep"',
+                )
+                self.send_header(
+                    "Cross-Origin-Resource-Policy",
+                    "Same-Origin"
+                    if active_scenario == "web-bad-corp"
+                    else "same-origin",
+                )
+                self.send_header(
+                    "Origin-Agent-Cluster",
+                    "?0" if active_scenario == "web-bad-oac" else "?1",
                 )
                 cookie = (
                     f"__Host-session={RESPONSE_COOKIE}; SameSite=Lax; Path=/"
@@ -277,6 +305,10 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
         "web.referrer_policy",
         "web.frame_options",
         "web.content_security_policy",
+        "web.cross_origin_opener_policy",
+        "web.cross_origin_embedder_policy",
+        "web.cross_origin_resource_policy",
+        "web.origin_agent_cluster",
         "web.cookies",
         "web.cors",
     }
@@ -299,6 +331,11 @@ def test_declared_response_security_contract_passes_without_retaining_values(mon
         ("web-bad-frame", "web.frame_options"),
         ("web-weak-csp", "web.content_security_policy"),
         ("web-broad-csp", "web.content_security_policy"),
+        ("web-bad-coop", "web.cross_origin_opener_policy"),
+        ("web-malformed-coop", "web.cross_origin_opener_policy"),
+        ("web-bad-coep", "web.cross_origin_embedder_policy"),
+        ("web-bad-corp", "web.cross_origin_resource_policy"),
+        ("web-bad-oac", "web.origin_agent_cluster"),
         ("web-cookie-flags", "web.cookies"),
         ("web-cookie-false-flags", "web.cookies"),
         ("web-cookie-empty-domain", "web.cookies"),
@@ -616,6 +653,12 @@ def test_public_contract_rejects_unsafe_request_shapes(change):
         lambda resource: resource["response_security"]["security_headers"][
             "content_security_policy"
         ]["required_directives"].update({"Bad-Directive": ["'none'"]}),
+        lambda resource: resource["response_security"]["security_headers"].update(
+            cross_origin_opener_policy=["same-origin", "same-origin"]
+        ),
+        lambda resource: resource["response_security"]["security_headers"].update(
+            origin_agent_cluster=False
+        ),
     ],
 )
 def test_response_security_rejects_ambiguous_contracts(change):

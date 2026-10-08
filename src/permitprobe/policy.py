@@ -226,6 +226,16 @@ class SecurityHeadersContract(Strict):
         default_factory=list, max_length=2
     )
     content_security_policy: CSPContract | None = None
+    cross_origin_opener_policy: list[
+        Literal["same-origin", "same-origin-allow-popups", "noopener-allow-popups"]
+    ] = Field(default_factory=list, max_length=3)
+    cross_origin_embedder_policy: list[Literal["require-corp", "credentialless"]] = Field(
+        default_factory=list, max_length=2
+    )
+    cross_origin_resource_policy: list[
+        Literal["same-origin", "same-site", "cross-origin"]
+    ] = Field(default_factory=list, max_length=3)
+    origin_agent_cluster: Literal[True] | None = None
 
     @model_validator(mode="after")
     def valid(self):
@@ -235,11 +245,20 @@ class SecurityHeadersContract(Strict):
             and not self.referrer_policy
             and not self.frame_options
             and self.content_security_policy is None
+            and not self.cross_origin_opener_policy
+            and not self.cross_origin_embedder_policy
+            and not self.cross_origin_resource_policy
+            and self.origin_agent_cluster is None
         ):
             raise ValueError("security_headers needs at least one declared response contract")
-        if len(self.referrer_policy) != len(set(self.referrer_policy)) or len(
-            self.frame_options
-        ) != len(set(self.frame_options)):
+        accepted_lists = (
+            self.referrer_policy,
+            self.frame_options,
+            self.cross_origin_opener_policy,
+            self.cross_origin_embedder_policy,
+            self.cross_origin_resource_policy,
+        )
+        if any(len(values) != len(set(values)) for values in accepted_lists):
             raise ValueError("accepted security header values must be distinct")
         return self
 
