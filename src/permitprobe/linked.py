@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 from overstep.models import Effect, TestCase, Variant
@@ -38,7 +38,7 @@ class LinkedCase:
 class PreparedLinked:
     config: API
     cases: list[LinkedCase]
-    tokens: dict[str, str | None]
+    tokens: dict[str, str | None] = field(repr=False)
 
 
 def _case_id(resource: LinkedResource, source: str, subject: str, owner: str) -> str:
@@ -114,7 +114,7 @@ def prepare_linked(
     subjects = {subject.name: subject for subject in config.subjects}
     owners = [subject for subject in config.subjects if subject.role != "anonymous"]
     anonymous = next(subject for subject in config.subjects if subject.role == "anonymous")
-    tokens = {subject.name: subject.token for subject in primary.matrix.subjects}
+    tokens = dict(primary.credentials)
     cases = []
     for resource in config.linked_resources:
         source = sources[resource.source_resource]

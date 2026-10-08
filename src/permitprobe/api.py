@@ -7,7 +7,7 @@ providers, MCP commands, waivers, or raw upstream reports are executed/written.
 import asyncio
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from importlib.metadata import version
 from time import monotonic
 from typing import Callable
@@ -67,30 +67,15 @@ async def fetch(
                 return response.status_code, body.decode("utf-8"), response.headers
 
 
-def compile_matrix(
-    config: API, *, resolve_tokens: bool = False, include_exploration: bool = False
-) -> dict:
-    if not config.resources:
-        raise ValueError("an authorization matrix requires an ordinary resource")
-    if not resolve_tokens and (
-        any(s.cookie_env for s in config.subjects)
-        or any(
-            r.redirect
-            for r in [
-                *config.resources,
-                *(config.exploration_resources if include_exploration else []),
-            ]
-        )
-    ):
-        raise ValueError("cookie and redirect contracts cannot be exported as an auth-only matrix")
-    subjects = []
+def _subject_credentials(config: API, *, resolve: bool) -> dict[str, str | None]:
+    credentials = {}
     seen_tokens = set()
     for s in config.subjects:
         token = None
         credential_env = s.token_env or s.cookie_env
         if credential_env:
             token = "${" + credential_env + "}"
-            if resolve_tokens:
+            if resolve:
                 token = os.environ.get(credential_env, "")
                 if (
                     not token.strip()
@@ -100,11 +85,23 @@ def compile_matrix(
                 ):
                     raise ValueError("missing, duplicated, or invalid subject credential")
                 seen_tokens.add(token)
+        credentials[s.name] = token
+    return credentials
+
+
+def _compile_matrix(
+    config: API,
+    credentials: dict[str, str | None],
+    *,
+    include_exploration: bool,
+) -> dict:
+    subjects = []
+    for s in config.subjects:
         subjects.append(
             {
                 "name": s.name,
                 "role": s.role,
-                "token": token,
+                "token": credentials[s.name],
                 "attributes": s.attributes,
                 "marker": s.marker,
             }
@@ -130,6 +127,29 @@ def compile_matrix(
             for resource in selected_resources
         },
     }
+
+
+def compile_matrix(
+    config: API, *, resolve_tokens: bool = False, include_exploration: bool = False
+) -> dict:
+    if not config.resources:
+        raise ValueError("an authorization matrix requires an ordinary resource")
+    if not resolve_tokens and (
+        any(s.cookie_env for s in config.subjects)
+        or any(
+            r.redirect
+            for r in [
+                *config.resources,
+                *(config.exploration_resources if include_exploration else []),
+            ]
+        )
+    ):
+        raise ValueError("cookie and redirect contracts cannot be exported as an auth-only matrix")
+    return _compile_matrix(
+        config,
+        _subject_credentials(config, resolve=resolve_tokens),
+        include_exploration=include_exploration,
+    )
 
 
 def pointer_value(data, pointer: str):
@@ -251,6 +271,7 @@ class PreparedAPI:
     cases: list[TestCase]
     resources: dict
     subjects: dict
+    credentials: dict[str, str | None] = field(repr=False)
     validators: dict
     denial_validators: dict
 
@@ -271,10 +292,11 @@ def prepare_api(
         report.add("api.engine_version", "inconclusive", "api", "Untested Overstep version.")
         return None
     try:
+        credentials = _subject_credentials(config, resolve=True)
         matrix = Matrix.model_validate(
-            compile_matrix(
+            _compile_matrix(
                 config,
-                resolve_tokens=True,
+                _subject_credentials(config, resolve=False),
                 include_exploration=include_exploration,
             )
         )
@@ -334,7 +356,14 @@ def prepare_api(
     )
     report.plan([case_descriptor(case) for case in cases])
     return PreparedAPI(
-        config, matrix, cases, resources, subjects, validators, denial_validators
+        config=config,
+        matrix=matrix,
+        cases=cases,
+        resources=resources,
+        subjects=subjects,
+        credentials=credentials,
+        validators=validators,
+        denial_validators=denial_validators,
     )
 
 
@@ -351,7 +380,7 @@ def execute_api_cases(
         validation_limiter = ValidationLimiter(
             prepared.config.validation_timeout_ms / 1_000
         )
-    tokens = {subject.name: subject.token for subject in prepared.matrix.subjects}
+    tokens = prepared.credentials
     observations = []
     for case in planned:
         remaining = None if deadline is None else deadline - clock()

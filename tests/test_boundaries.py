@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+import permitprobe.api as api_module
 from permitprobe.api import check_api, compile_matrix, fetch
 from permitprobe.cli import main
 from permitprobe.demo import (
@@ -63,6 +64,59 @@ def test_actual_http_boundaries(scenario, code, rule):
     serialized = json.dumps(report.to_dict())
     for secret in [*DEMO_TOKENS.values(), "synthetic@example.invalid", "synthetic-sensitive-value"]:
         assert secret not in serialized
+
+
+def test_planner_and_classifier_never_receive_live_credentials(monkeypatch):
+    observed = []
+    real_plan = api_module.plan
+    real_classify = api_module.classify
+
+    def inspect(function):
+        def wrapped(matrix, *args, **kwargs):
+            tokens = {subject.name: subject.token for subject in matrix.subjects}
+            observed.append(tokens)
+            assert not set(DEMO_TOKENS.values()) & set(tokens.values())
+            return function(matrix, *args, **kwargs)
+
+        return wrapped
+
+    monkeypatch.setattr(api_module, "plan", inspect(real_plan))
+    monkeypatch.setattr(api_module, "classify", inspect(real_classify))
+    with fixture_server("safe") as (url, requests), demo_environment():
+        report = Report()
+        check_api(Policy.model_validate(example_policy(url)).api, report)
+    assert report.exit_code == 0, report.to_dict()
+    assert observed == [
+        {"anon": None, "alice": "${PP_ALICE_TOKEN}", "bob": "${PP_BOB_TOKEN}"},
+        {"anon": None, "alice": "${PP_ALICE_TOKEN}", "bob": "${PP_BOB_TOKEN}"},
+    ]
+    delivered = {headers.get("Authorization") for _, _, headers in requests}
+    assert delivered == {
+        None,
+        "Bearer " + DEMO_TOKENS["PP_ALICE_TOKEN"],
+        "Bearer " + DEMO_TOKENS["PP_BOB_TOKEN"],
+    }
+
+
+def test_cookie_credentials_stay_out_of_engine_matrix_and_prepared_repr(monkeypatch):
+    data = example_policy()
+    cookies = {
+        "PP_ALICE_COOKIE": "session=synthetic-alice-cookie",
+        "PP_BOB_COOKIE": "session=synthetic-bob-cookie",
+    }
+    for subject, env in zip(data["api"]["subjects"][1:], cookies, strict=True):
+        subject.pop("token_env")
+        subject["cookie_env"] = env
+    for name, value in cookies.items():
+        monkeypatch.setenv(name, value)
+    prepared = api_module.prepare_api(Policy.model_validate(data).api, Report())
+    assert prepared is not None
+    assert {subject.name: subject.token for subject in prepared.matrix.subjects} == {
+        "anon": None,
+        "alice": "${PP_ALICE_COOKIE}",
+        "bob": "${PP_BOB_COOKIE}",
+    }
+    assert all(value not in repr(prepared) for value in cookies.values())
 
 
 def test_partial_positive_failure_is_not_masked_by_other_user():

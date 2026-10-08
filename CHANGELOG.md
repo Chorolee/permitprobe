@@ -30,6 +30,8 @@ while it is in the `0.x` development series.
   cannot pass a different numeric schema constraint after binary floating-point rounding.
 - Handoff scans now hash-pin the official Gitleaks executable itself and run a private verified
   copy, so a forged version string or scanner path replacement cannot execute untrusted bytes.
+- Live bearer tokens and cookies are now kept outside the third-party planning and classification
+  matrix, which receives environment-reference placeholders while PermitProbe alone sends values.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized
