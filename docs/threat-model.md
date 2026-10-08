@@ -98,7 +98,8 @@ case or Unicode aliases, and configured size overruns are rejected. Gitleaks is 
 temporary location and its complete platform-specific digest is verified before it scans staged
 bytes. The archive is then built from those checked bytes rather than by rereading source paths.
 
-Reports and other immutable artifacts are created at a new path with owner-only permissions.
+Starter directories and files, reports, and other immutable artifacts are created with owner-only
+permissions; immutable artifacts always use a new path.
 Exploration state also starts at a new owner-only path, then uses atomic replacement for its
 checkpoints. Complete report, bundle, state and installed-scanner bytes are flushed from the open
 file descriptor before their staged inode is published. These guarantees assume a trusted parent
