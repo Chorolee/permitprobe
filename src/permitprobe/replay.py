@@ -12,6 +12,7 @@ from permitprobe import __version__
 from permitprobe.api import case_descriptor, execute_api_cases, finalize_api, prepare_api
 from permitprobe.artifacts import write_private_json
 from permitprobe.exploration import baseline_cases
+from permitprobe.local_files import read_bounded_regular
 from permitprobe.policy import API, PolicyError, _unique, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import _validate_prior_report
@@ -37,10 +38,7 @@ def _canonical(value: dict) -> bytes:
 
 def _read_json(path: Path, limit: int):
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(limit + 1)
-        if len(raw) > limit:
-            raise ValueError
+        raw = read_bounded_regular(path, limit)
         return json.loads(
             raw,
             object_pairs_hook=_unique,

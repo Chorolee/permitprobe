@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from permitprobe.local_files import read_bounded_regular
 from permitprobe.policy import API, PolicyError, _unique, api_contract_digest, origin_key
 from permitprobe.report import Report
 
@@ -33,10 +34,7 @@ class Surface:
 
 def _load(path: Path) -> tuple[dict, str]:
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(MAX_OPENAPI_BYTES + 1)
-        if len(raw) > MAX_OPENAPI_BYTES:
-            raise ValueError
+        raw = read_bounded_regular(path, MAX_OPENAPI_BYTES)
         document = json.loads(
             raw,
             object_pairs_hook=_unique,

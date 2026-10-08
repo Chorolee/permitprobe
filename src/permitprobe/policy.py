@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
+from permitprobe.local_files import read_bounded_regular
 from permitprobe.validation import (
     MAX_JSON_NUMBER_DIGITS,
     MAX_JSON_NUMBER_EXPONENT,
@@ -789,10 +790,7 @@ def _canonical_json(value) -> str:
 
 def load_policy(path: Path) -> Policy:
     try:
-        with path.open("rb") as f:
-            raw = f.read(MAX_POLICY_BYTES + 1)
-        if len(raw) > MAX_POLICY_BYTES:
-            raise PolicyError("policy is too large")
+        raw = read_bounded_regular(path, MAX_POLICY_BYTES)
         data = json.loads(
             raw,
             object_pairs_hook=_unique,

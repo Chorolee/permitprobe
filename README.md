@@ -124,6 +124,8 @@ Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, invalid Unicode, excessive numeric values, reused object IDs, and reused
 token references are rejected. Decimal values inside response schemas retain their exact JSON
 precision in both validation and the policy digest.
+Policy, OpenAPI, baseline, prior-report and replay JSON inputs must resolve to bounded regular
+files; pipes, sockets, directories and devices are refused without waiting for content.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
 
 ## Run one declared website assessment

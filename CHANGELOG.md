@@ -30,6 +30,8 @@ while it is in the `0.x` development series.
   cannot pass a different numeric schema constraint after binary floating-point rounding.
 - Policy JSON now preserves exact decimal schema values and rejects invalid Unicode or excessive
   numeric complexity before either can alter a contract digest or runtime verdict.
+- Policy, OpenAPI, baseline, prior-report and replay inputs now resolve to bounded regular files and
+  are opened nonblocking, preventing FIFOs or device paths from stalling an assessment.
 - Handoff scans now hash-pin the official Gitleaks executable itself and run a private verified
   copy, so a forged version string or scanner path replacement cannot execute untrusted bytes.
 - Live bearer tokens and cookies are now kept outside the third-party planning and classification

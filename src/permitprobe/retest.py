@@ -23,6 +23,7 @@ from permitprobe.linked import (
     prepare_linked,
     source_control_cases,
 )
+from permitprobe.local_files import read_bounded_regular
 from permitprobe.policy import API, PolicyError, _unique, api_contract_digest
 from permitprobe.public_contracts import (
     execute_public_cases,
@@ -37,10 +38,7 @@ RetestVerdict = Literal["reproduced", "fixed", "not_reproduced", "inconclusive"]
 
 def load_prior_report(path: Path) -> dict:
     try:
-        with path.open("rb") as handle:
-            raw = handle.read(MAX_PRIOR_REPORT_BYTES + 1)
-        if len(raw) > MAX_PRIOR_REPORT_BYTES:
-            raise ValueError
+        raw = read_bounded_regular(path, MAX_PRIOR_REPORT_BYTES)
         data = json.loads(
             raw,
             object_pairs_hook=_unique,
