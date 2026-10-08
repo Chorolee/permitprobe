@@ -6,12 +6,9 @@ import tempfile
 from pathlib import Path
 
 
-def write_private_json(path: Path, payload: object, *, ensure_ascii: bool = True) -> None:
-    """Publish complete JSON at a new path with owner-only permissions."""
+def write_private_bytes(path: Path, body: bytes) -> None:
+    """Publish complete bytes at a new path with owner-only permissions."""
 
-    body = (
-        json.dumps(payload, indent=2, ensure_ascii=ensure_ascii, allow_nan=False) + "\n"
-    ).encode("utf-8")
     descriptor, temporary_name = tempfile.mkstemp(
         prefix=".permitprobe-", dir=path.parent
     )
@@ -25,3 +22,12 @@ def write_private_json(path: Path, payload: object, *, ensure_ascii: bool = True
         os.link(temporary, path)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def write_private_json(path: Path, payload: object, *, ensure_ascii: bool = True) -> None:
+    """Publish complete JSON at a new path with owner-only permissions."""
+
+    body = (
+        json.dumps(payload, indent=2, ensure_ascii=ensure_ascii, allow_nan=False) + "\n"
+    ).encode("utf-8")
+    write_private_bytes(path, body)

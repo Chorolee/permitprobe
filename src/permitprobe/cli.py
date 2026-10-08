@@ -6,7 +6,7 @@ from pathlib import Path
 
 from permitprobe import __version__
 from permitprobe.api import check_api, compile_matrix
-from permitprobe.artifacts import write_private_json
+from permitprobe.artifacts import write_private_bytes, write_private_json
 from permitprobe.baseline import Baseline, apply_baseline, build_baseline
 from permitprobe.collection_demo import run_collection_demo
 from permitprobe.demo import example_policy, run_demo
@@ -249,12 +249,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(Policy.model_json_schema(), indent=2))
             return 0
         if args.command == "init":
-            args.directory.mkdir(parents=True, exist_ok=False)
-            (args.directory / "permitprobe.json").write_text(
-                json.dumps(example_policy(), indent=2) + "\n"
+            args.directory.mkdir(parents=True, mode=0o700, exist_ok=False)
+            write_private_json(
+                args.directory / "permitprobe.json",
+                example_policy(),
             )
-            (args.directory / "review.txt").write_text(
-                "Replace with the text you intend to hand off.\n"
+            write_private_bytes(
+                args.directory / "review.txt",
+                b"Replace with the text you intend to hand off.\n",
             )
             print(
                 "Starter created. Set your staging origin, object IDs, response schema and token environment variables."

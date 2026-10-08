@@ -86,6 +86,8 @@ while it is in the `0.x` development series.
   credentials literal rules instead of accepting normalized lookalikes that browsers reject.
 - Local security artifacts are published complete with owner-only permissions, independently of
   the invoking process's umask, and existing paths are never replaced.
+- Starter directories and their policy and review files now use owner-only permissions, preventing
+  later user edits from inheriting a public-readable initialization mode.
 - The synthetic read-path demo emits redirects only for its declared canonical fixture paths;
   request path input can no longer flow into a response `Location` header.
 - CI now enforces Ruff's security rules on production code, keeps checkout credentials out of

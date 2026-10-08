@@ -103,6 +103,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   allowlist for every feature declared disabled; never retain observed policy values.
 - Publish local reports, baselines, replay/retest records, matrices, state and checked bundles with
   owner-only permissions; never replace an existing immutable artifact.
+- Create starter policy directories and files with owner-only permissions so later user edits do
+  not inherit public-readable modes from the initialization template.
 - Flush and fsync complete staged artifact and scanner bytes through their open descriptor before
   atomic link or replacement; set permissions through the descriptor rather than its temporary name.
 - Match CORS allow-origin values to the request's serialized Origin byte-for-byte and accept only

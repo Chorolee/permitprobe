@@ -92,6 +92,8 @@ file contents, or raw scanner diagnostics are included in PermitProbe reports.
 permitprobe init my-security-checks
 ```
 
+The starter directory is created with mode `0700`; its policy and review files use `0600`.
+
 Edit `my-security-checks/permitprobe.json`:
 
 - Set the HTTPS origin of a target you operate. HTTP is accepted only for literal loopback.

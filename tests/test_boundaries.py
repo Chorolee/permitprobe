@@ -682,8 +682,15 @@ def test_export_uses_env_references_only(tmp_path, capsys):
 
 def test_cli_initializer_does_not_overwrite(tmp_path, capsys):
     target = tmp_path / "starter"
-    assert main(["init", str(target)]) == 0
+    previous_umask = os.umask(0)
+    try:
+        assert main(["init", str(target)]) == 0
+    finally:
+        os.umask(previous_umask)
     assert load_policy(target / "permitprobe.json")
+    assert stat.S_IMODE(target.stat().st_mode) == 0o700
+    assert stat.S_IMODE((target / "permitprobe.json").stat().st_mode) == 0o600
+    assert stat.S_IMODE((target / "review.txt").stat().st_mode) == 0o600
     (target / "review.txt").write_text("User edit")
     assert main(["init", str(target)]) == 2
     assert (target / "review.txt").read_text() == "User edit"
