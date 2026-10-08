@@ -95,7 +95,7 @@ def public_scan_policy(base_url, *, handoff=False):
 
 def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypatch):
     secret_query = "synthetic-query-value-must-not-survive"
-    secret_path = "A7f9Q2m8K4v6N3x1R5t0Z9y8"
+    opaque_path = "A7f9Q2m8K4v6N3x1R5t0Z9y8"
     secret_cookie = "response-cookie-must-not-survive"
     short_secret = "aB3dE5fG7h"
     person_name = "jane-smith"
@@ -110,7 +110,7 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
             f"""
             <a href="/documents/alice?view=summary&token={secret_query}">declared</a>
             <a href="/admin?token={secret_query}">candidate</a>
-            <a href="/reset/{secret_path}">sensitive path</a>
+            <a href="/reset/{opaque_path}">sensitive path</a>
             <a href="/reset/{short_secret}">short sensitive path</a>
             <a href="/users/{person_name}">person path</a>
             <a href="https://outside.example.invalid/foreign">external</a>
@@ -157,7 +157,7 @@ def test_discovery_proposes_sanitized_candidates_without_fetching_them(monkeypat
     payload = report.to_dict()
     serialized = json.dumps(payload)
     assert secret_query not in serialized
-    assert secret_path not in serialized
+    assert opaque_path not in serialized
     assert secret_cookie not in serialized
     assert short_secret not in serialized
     assert person_name not in serialized

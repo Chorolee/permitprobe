@@ -30,6 +30,8 @@ while it is in the `0.x` development series.
 
 - OpenAPI inventory now validates referenced security-scheme objects, required OAuth scopes and
   HTTPS flow endpoints, rejecting incomplete schemes before reporting protected-route coverage.
+- CI now scans the clean checked-out source with hash-verified Gitleaks and fixed default rules
+  before tests or builds, ignoring repository suppression files and inline allow comments.
 - API response validation now preserves exact decimal numbers so large or high-precision values
   cannot pass a different numeric schema constraint after binary floating-point rounding.
 - Policy JSON now preserves exact decimal schema values and rejects invalid Unicode or excessive

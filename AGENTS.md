@@ -76,6 +76,9 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   ancestor of main, and materialize that exact commit without running tag-controlled code.
 - Keep GitHub Actions pinned to full commit SHAs. Dependency updates must pass dependency review,
   CodeQL and the ordinary test/build workflow before release.
+- Scan the clean checked-out source with the verified pinned Gitleaks binary before tests generate
+  bytecode or build artifacts. Pin its built-in rules and ignore repository suppression files and
+  inline allow comments; synthetic fixtures must not require broad source-scan exceptions.
 - Keep Ruff security rules enabled for production code. Suppress a finding only at its reviewed
   call site with a concrete trust-boundary comment; tests may ignore fixture-only assertions and
   synthetic credentials.

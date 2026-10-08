@@ -30,6 +30,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements.lock
+      - run: python scripts/install_gitleaks.py
+      - name: Scan the checked-out source for secrets
+        if: matrix.python-version == '3.14'
+        env:
+          GITLEAKS_CONFIG_TOML: |
+            [extend]
+            useDefault = true
+        run: >-
+          .tools/gitleaks dir .
+          --gitleaks-ignore-path /dev/null
+          --ignore-gitleaks-allow
+          --no-banner
+          --redact
       - name: Install hash-locked dependencies
         run: >-
           python -m pip install
@@ -38,7 +51,6 @@ jobs:
           -r requirements.lock
       - name: Install PermitProbe without dependency resolution
         run: python -m pip install --no-deps -e .
-      - run: python scripts/install_gitleaks.py
       - run: ruff check src tests scripts
       - run: python -m pytest -q
       - run: python -m build --no-isolation
