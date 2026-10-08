@@ -3,6 +3,13 @@
 All notable changes to PermitProbe are recorded here. The project uses semantic versioning
 while it is in the `0.x` development series.
 
+## [Unreleased]
+
+### Changed
+
+- Public maintainer attribution uses the GitHub handle `@Chorolee` only. Package metadata contains
+  no maintainer email address.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added

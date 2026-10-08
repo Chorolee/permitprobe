@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE"]
-maintainers = [{name = "Susan (@Chorolee)"}]
+maintainers = [{name = "@Chorolee"}]
 keywords = ["security", "authorization", "api-security", "security-testing", "web-security"]
 dependencies = [
   "httpx>=0.28,<1",
