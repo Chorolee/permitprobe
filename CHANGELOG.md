@@ -80,6 +80,8 @@ while it is in the `0.x` development series.
   rejects any tag whose commit is not an ancestor of `main` before materializing its source.
 - Release verification now bounds the complete decompressed sdist stream and archive member counts,
   preventing a compact release asset from exhausting the publication runner during traversal.
+- Isolated wheel smoke tests now run `pip check` after hash-locked installation, rejecting an
+  internally inconsistent installed dependency graph before tagging or publication.
 - Prior reports used for baselines, replay creation and finding retests now reject duplicate JSON
   keys, non-finite numbers and invalid Unicode before they can influence a verdict or request.
 - CORS response checks now apply Fetch's byte-exact serialized Origin and case-sensitive
