@@ -32,6 +32,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   never become requests automatically.
 - Registry publication must verify downloaded asset digests and prove executable wheel/sdist
   package bytes match the requested release tag.
+- Registry verification code, dependency locks and scanner installers must execute from the trusted
+  main checkout; a requested release tag is data and source evidence, never the verifier.
 - Keep GitHub Actions pinned to full commit SHAs. Dependency updates must pass dependency review,
   CodeQL and the ordinary test/build workflow before release.
 - Keep Ruff security rules enabled for production code. Suppress a finding only at its reviewed
