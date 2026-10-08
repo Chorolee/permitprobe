@@ -253,6 +253,23 @@ def test_policy_rejects_ambiguous_and_unsupported_features(change):
         Policy.model_validate(data)
 
 
+@pytest.mark.parametrize("schema_name", ["response_schema", "denial_schema"])
+def test_policy_rejects_ignored_format_assertions(schema_name):
+    data = example_policy()
+    schema = data["api"]["resources"][0][schema_name]
+    property_name = next(iter(schema["properties"]))
+    schema["properties"][property_name]["format"] = "email"
+    with pytest.raises(ValidationError):
+        Policy.model_validate(data)
+
+
+def test_response_object_may_have_a_property_named_format():
+    data = example_policy()
+    schema = data["api"]["resources"][0]["response_schema"]
+    schema["properties"]["format"] = {"type": "string"}
+    assert Policy.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "text",
     [

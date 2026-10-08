@@ -111,6 +111,51 @@ def valid_pointer(pointer: str) -> bool:
     return bool(re.fullmatch(r"(?:/(?:[^~/]|~[01])*)*", pointer))
 
 
+_SINGLE_SUBSCHEMAS = {
+    "additionalProperties",
+    "contains",
+    "else",
+    "if",
+    "items",
+    "not",
+    "propertyNames",
+    "then",
+    "unevaluatedItems",
+    "unevaluatedProperties",
+}
+_ARRAY_SUBSCHEMAS = {"allOf", "anyOf", "oneOf", "prefixItems"}
+_MAPPED_SUBSCHEMAS = {"$defs", "dependentSchemas", "patternProperties", "properties"}
+_UNRESOLVED_REFERENCES = {"$ref", "$dynamicRef", "$recursiveRef"}
+
+
+def _schema_nodes(schema: dict):
+    """Yield actual schema objects without treating property names or constants as keywords."""
+
+    stack = [schema]
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        yield node
+        stack.extend(node[key] for key in _SINGLE_SUBSCHEMAS if key in node)
+        for key in _ARRAY_SUBSCHEMAS:
+            value = node.get(key)
+            if isinstance(value, list):
+                stack.extend(value)
+        for key in _MAPPED_SUBSCHEMAS:
+            value = node.get(key)
+            if isinstance(value, dict):
+                stack.extend(value.values())
+
+
+def _check_supported_schema(schema: dict) -> None:
+    for node in _schema_nodes(schema):
+        if _UNRESOLVED_REFERENCES & node.keys():
+            raise ValueError("response schemas must be inline; references are not resolved")
+        if "format" in node:
+            raise ValueError("response schema format assertions are not enforced")
+
+
 class Collection(Strict):
     items_pointer: str = Field(max_length=512)
     owner_pointer: str | None = Field(default=None, min_length=1, max_length=512)
@@ -404,15 +449,7 @@ class PublicResource(Strict):
                 Draft202012Validator.check_schema(self.response_schema)
             except Exception:
                 raise ValueError("invalid or empty public response JSON Schema") from None
-            stack = [self.response_schema]
-            while stack:
-                node = stack.pop()
-                if isinstance(node, dict):
-                    if any(key in node for key in ("$ref", "$dynamicRef", "$recursiveRef")):
-                        raise ValueError("v0.1 schemas must be inline; references are not resolved")
-                    stack.extend(node.values())
-                elif isinstance(node, list):
-                    stack.extend(node)
+            _check_supported_schema(self.response_schema)
         return self
 
 
@@ -473,15 +510,9 @@ class Resource(Strict):
                 Draft202012Validator.check_schema(schema)
         except Exception:
             raise ValueError("invalid or empty response JSON Schema") from None
-        stack = [self.response_schema, self.denial_schema]
-        while stack:
-            node = stack.pop()
-            if isinstance(node, dict):
-                if any(k in node for k in ("$ref", "$dynamicRef", "$recursiveRef")):
-                    raise ValueError("v0.1 schemas must be inline; references are not resolved")
-                stack.extend(node.values())
-            elif isinstance(node, list):
-                stack.extend(node)
+        for schema in (self.response_schema, self.denial_schema):
+            if schema is not None:
+                _check_supported_schema(schema)
         return self
 
 
