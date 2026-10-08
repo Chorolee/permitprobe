@@ -855,7 +855,9 @@ def test_absolute_deadline_stops_slow_drip(slow_part):
                 pass
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread = threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    )
     thread.start()
     config = Policy.model_validate(example_policy()).api.model_copy(update={"timeout_seconds": 1})
     try:

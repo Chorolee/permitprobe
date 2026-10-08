@@ -216,8 +216,14 @@ def linked_servers(scenario: str = "safe"):
     api_server = ThreadingHTTPServer(("127.0.0.1", 0), APIHandler)
     storage_server = ThreadingHTTPServer(("127.0.0.1", 0), StorageHandler)
     threads = [
-        threading.Thread(target=api_server.serve_forever, daemon=True),
-        threading.Thread(target=storage_server.serve_forever, daemon=True),
+        threading.Thread(
+            target=api_server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+        ),
+        threading.Thread(
+            target=storage_server.serve_forever,
+            kwargs={"poll_interval": 0.01},
+            daemon=True,
+        ),
     ]
     for thread in threads:
         thread.start()
