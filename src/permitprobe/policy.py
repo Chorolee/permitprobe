@@ -126,6 +126,65 @@ _SINGLE_SUBSCHEMAS = {
 _ARRAY_SUBSCHEMAS = {"allOf", "anyOf", "oneOf", "prefixItems"}
 _MAPPED_SUBSCHEMAS = {"$defs", "dependentSchemas", "patternProperties", "properties"}
 _UNRESOLVED_REFERENCES = {"$ref", "$dynamicRef", "$recursiveRef"}
+_SUPPORTED_SCHEMA_KEYWORDS = {
+    "$anchor",
+    "$comment",
+    "$defs",
+    "$dynamicAnchor",
+    "$dynamicRef",
+    "$id",
+    "$ref",
+    "$schema",
+    "additionalProperties",
+    "allOf",
+    "anyOf",
+    "const",
+    "contains",
+    "default",
+    "dependentRequired",
+    "dependentSchemas",
+    "deprecated",
+    "description",
+    "else",
+    "enum",
+    "examples",
+    "exclusiveMaximum",
+    "exclusiveMinimum",
+    "format",
+    "if",
+    "items",
+    "maxContains",
+    "maxItems",
+    "maxLength",
+    "maxProperties",
+    "maximum",
+    "minContains",
+    "minItems",
+    "minLength",
+    "minProperties",
+    "minimum",
+    "multipleOf",
+    "not",
+    "oneOf",
+    "pattern",
+    "patternProperties",
+    "prefixItems",
+    "properties",
+    "propertyNames",
+    "readOnly",
+    "required",
+    "then",
+    "title",
+    "type",
+    "unevaluatedItems",
+    "unevaluatedProperties",
+    "uniqueItems",
+    "writeOnly",
+}
+_DRAFT_2020_12_SCHEMAS = {
+    "https://json-schema.org/draft/2020-12/schema",
+    "https://json-schema.org/draft/2020-12/schema#",
+}
 
 
 def _schema_nodes(schema: dict):
@@ -154,6 +213,11 @@ def _check_supported_schema(schema: dict) -> None:
             raise ValueError("response schemas must be inline; references are not resolved")
         if "format" in node:
             raise ValueError("response schema format assertions are not enforced")
+        if set(node) - _SUPPORTED_SCHEMA_KEYWORDS:
+            raise ValueError("response schema contains an unsupported keyword")
+        dialect = node.get("$schema")
+        if dialect is not None and dialect not in _DRAFT_2020_12_SCHEMAS:
+            raise ValueError("response schema must use Draft 2020-12")
 
 
 class Collection(Strict):

@@ -787,9 +787,10 @@ local-process assumptions, artifact boundary, and fail-closed guarantees in one 
   evidence, but a status code alone does not prove a particular secret was disclosed.
 - The owner must supply the intended policy, real test identities, and existing test objects.
   A wrong policy or overly permissive JSON Schema can produce misleading conclusions.
-- JSON Schemas are inline Draft 2020-12. Reference keywords and `format` assertions are rejected
-  because the validator does not resolve or enforce them. Denial responses must also be valid JSON
-  matching their declared schema.
+- JSON Schemas use a strict Draft 2020-12 keyword set. Unknown, legacy and content-annotation
+  keywords, reference keywords, `format` assertions, and other declared dialects are rejected
+  rather than silently ignored. Denial responses must also be valid JSON matching their declared
+  schema.
 - These observations are **not** a proof of database grants, RLS, complete storage/bucket policy,
   GraphQL, intermediary cache behavior, or write-path correctness. Cache checks cover response
   headers only. The tool never connects to a database in v0.3.
