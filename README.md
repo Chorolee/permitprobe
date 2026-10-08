@@ -704,7 +704,8 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` pins the tested
 Python dependency versions and every accepted distribution SHA256; project installation then runs
-without dependency resolution. Engine and dependency updates must pass the regression fixtures.
+without dependency resolution. The verified scanner is published complete and executable at a new
+path without replacing an existing file. Engine and dependency updates must pass the regression fixtures.
 No code from a source-available-only security product is embedded here.
 
 An auth-only matrix can be exported for direct use with Overstep:
