@@ -1,4 +1,5 @@
 import json
+import stat
 
 import pytest
 
@@ -139,6 +140,7 @@ def test_retest_cli_writes_append_only_result(tmp_path, capsys):
     assert exit_code == 0
     assert len(requests) == 4
     assert json.loads(output.read_text())["verdict"] == "fixed"
+    assert stat.S_IMODE(output.stat().st_mode) == 0o600
     assert json.loads(capsys.readouterr().out)["verdict"] == "fixed"
 
 

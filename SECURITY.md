@@ -18,6 +18,7 @@ an external transfer. Test only systems you operate or are authorized to test.
 Sensitive handling rules:
 
 - Credentials enter through named environment variables and are not persisted in reports.
+- Generated security artifacts use owner-only file permissions and never replace existing paths.
 - Response bodies and raw scanner output must never reach PermitProbe reports.
 - Exploration providers receive normalized case and observation metadata only. They do not
   receive target credentials, response bodies, headers, URLs, redirect destinations or files.

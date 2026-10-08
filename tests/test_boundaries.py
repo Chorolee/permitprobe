@@ -2,6 +2,7 @@ import asyncio
 import copy
 import json
 import os
+import stat
 import subprocess
 import sys
 import zipfile
@@ -353,11 +354,11 @@ def test_scanner_errors_do_not_leak_stdout(tmp_path, capsys):
 def test_export_uses_env_references_only(tmp_path, capsys):
     policy = tmp_path / "policy.json"
     policy.write_text(json.dumps(example_policy()))
+    matrix = tmp_path / "matrix.json"
     with demo_environment():
-        assert (
-            main(["export-overstep", str(policy), "--output", str(tmp_path / "matrix.json")]) == 0
-        )
-    text = (tmp_path / "matrix.json").read_text()
+        assert main(["export-overstep", str(policy), "--output", str(matrix)]) == 0
+    text = matrix.read_text()
+    assert stat.S_IMODE(matrix.stat().st_mode) == 0o600
     assert "${PP_ALICE_TOKEN}" in text
     assert all(value not in text for value in DEMO_TOKENS.values())
     from overstep.matrix import load_matrix
@@ -396,6 +397,7 @@ def test_cli_bundle_is_handoff_only(tmp_path, scanner, capsys):
     result = json.loads(capsys.readouterr().out)
     assert result["unconfigured_surfaces"] == ["api", "data"]
     assert (tmp_path / "result.zip").is_file()
+    assert stat.S_IMODE((tmp_path / "result.zip").stat().st_mode) == 0o600
 
 
 def test_cli_cannot_export_failed_handoff(tmp_path, scanner, capsys):

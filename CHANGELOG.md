@@ -24,6 +24,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- Local security artifacts are published complete with owner-only permissions, independently of
+  the invoking process's umask, and existing paths are never replaced.
 - The synthetic read-path demo emits redirects only for its declared canonical fixture paths;
   request path input can no longer flow into a response `Location` header.
 - CI now enforces Ruff's security rules on production code, keeps checkout credentials out of

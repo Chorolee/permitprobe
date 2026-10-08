@@ -1,5 +1,6 @@
 import copy
 import json
+import stat
 from datetime import date
 
 import pytest
@@ -228,6 +229,7 @@ def test_cli_creates_and_applies_baseline_without_hiding_report(tmp_path, capsys
             main(["check", str(policy_path), "--format", "json", "--report", str(first_report)])
             == 1
         )
+        assert stat.S_IMODE(first_report.stat().st_mode) == 0o600
         capsys.readouterr()
 
         baseline_path = tmp_path / "baseline.json"
@@ -246,6 +248,7 @@ def test_cli_creates_and_applies_baseline_without_hiding_report(tmp_path, capsys
         )
         summary = json.loads(capsys.readouterr().out)
         assert summary["recorded"] > 0
+        assert stat.S_IMODE(baseline_path.stat().st_mode) == 0o600
         original_baseline = baseline_path.read_bytes()
         assert (
             main(
