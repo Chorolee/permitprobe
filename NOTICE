@@ -13,10 +13,6 @@ PermitProbe is independently implemented and uses third-party software:
 Each dependency retains its own license and notices. The repository contains
 synthetic demonstrations, not production data, credentials, or private source.
 
-Related work considered for later adapters:
-Supabase Test Helpers (MIT) and rlsautotest (Apache-2.0).
-Neither is included in, or required by, the current implementation.
-
 Conceptual design reference:
 ARTEX, https://github.com/Autumn-27/ARTEX (reviewed source: AGPL-3.0).
 No ARTEX code, prompts, screenshots, or assets are included. See README.md for

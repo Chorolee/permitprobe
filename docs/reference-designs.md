@@ -47,6 +47,9 @@ endorsement, or a security assessment of those projects.
   informed PermitProbe's explicit known-finding files. PermitProbe keeps normalized failures
   visible, gates only exact code/target matches, retains unobserved entries, and lets incomplete
   evidence override every baseline match.
+- RESTler's reproducibility goal informed sanitized replay manifests. PermitProbe records only a
+  target-bound policy digest, source-report digest and authorized case IDs, then revalidates the
+  exact deterministic baseline and current policy catalogue before any replay request.
 
 ### Deliberately excluded
 
@@ -64,8 +67,5 @@ endorsement, or a security assessment of those projects.
 
 ## Next candidates
 
-1. A sanitized replay bundle containing normalized case IDs and policy digests rather than
-   raw requests, following RESTler's reproducibility goal while preserving PermitProbe's
-   credential and response-body boundary.
-2. Policy provenance or signatures if third-party policy distribution is introduced,
+1. Policy provenance or signatures if third-party policy distribution is introduced,
    following Nuclei's signed-template trust boundary.
