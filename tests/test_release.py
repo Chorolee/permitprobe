@@ -1,6 +1,7 @@
 import base64
 import copy
 import csv
+import gzip
 import hashlib
 import importlib.util
 import io
@@ -76,6 +77,29 @@ def test_release_verification_bounds_expanded_wheel_before_read(
 ):
     release, path = release_pair
     monkeypatch.setattr(module, "MAX_ARCHIVE_MEMBER", 1)
+    with pytest.raises(ValueError, match="expands"):
+        module.verify_release(release, path, f"v{VERSION}")
+
+
+def test_release_verification_bounds_sdist_decompression(monkeypatch, tmp_path):
+    source = tmp_path / "oversized.tar.gz"
+    source.write_bytes(gzip.compress(b"x" * 33))
+    monkeypatch.setattr(module, "MAX_TAR_STREAM", 32)
+    with pytest.raises(ValueError, match="expands"):
+        module._bounded_tar(source)
+
+
+def test_release_verification_bounds_sdist_member_count(monkeypatch, release_pair):
+    release, path = release_pair
+    monkeypatch.setattr(module, "MAX_ARCHIVE_MEMBERS", 0)
+    with pytest.raises(ValueError, match="too many members"):
+        with module._bounded_tar(path / f"permitprobe-{VERSION}.tar.gz") as archive:
+            module._bounded_tar_members(archive)
+
+
+def test_release_verification_bounds_wheel_member_count(monkeypatch, release_pair):
+    release, path = release_pair
+    monkeypatch.setattr(module, "MAX_ARCHIVE_MEMBERS", 1)
     with pytest.raises(ValueError, match="expands"):
         module.verify_release(release, path, f"v{VERSION}")
 

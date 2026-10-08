@@ -78,6 +78,8 @@ while it is in the `0.x` development series.
   response values from raising an integer-conversion exception, and accepts quoted decimal values.
 - Registry publication now resolves release tags inside the trusted full-history checkout and
   rejects any tag whose commit is not an ancestor of `main` before materializing its source.
+- Release verification now bounds the complete decompressed sdist stream and archive member counts,
+  preventing a compact release asset from exhausting the publication runner during traversal.
 - Prior reports used for baselines, replay creation and finding retests now reject duplicate JSON
   keys, non-finite numbers and invalid Unicode before they can influence a verdict or request.
 - CORS response checks now apply Fetch's byte-exact serialized Origin and case-sensitive
