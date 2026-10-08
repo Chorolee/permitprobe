@@ -32,6 +32,8 @@ endorsement, or a security assessment of those projects.
 - ZAP's definition-import stage supports keeping inventory separate from active scanning.
   PermitProbe reads a local document only and never turns an imported operation into an
   executable request.
+- ZAP's automation job/test separation also informed PermitProbe's `scan` orchestrator. Its
+  inventory, handoff, live GET and baseline stages retain distinct status inside one verdict.
 - Nuclei's declarative and validation-first model reinforces PermitProbe's strict policy
   parser: unknown fields fail, request capabilities are compiled by the core, and external
   providers cannot invent target requests.
@@ -53,10 +55,10 @@ endorsement, or a security assessment of those projects.
 
 ## Next candidates
 
-1. A sanitized replay bundle containing normalized case IDs and policy digests rather than
+1. Bounded same-origin passive discovery that produces policy proposals only; discovered links,
+   robots entries and sitemap locations must not become executable requests automatically.
+2. A sanitized replay bundle containing normalized case IDs and policy digests rather than
    raw requests, following RESTler's reproducibility goal while preserving PermitProbe's
    credential and response-body boundary.
-2. Policy provenance or signatures if third-party policy distribution is introduced,
+3. Policy provenance or signatures if third-party policy distribution is introduced,
    following Nuclei's signed-template trust boundary.
-3. Explicit staged automation plans only after each stage has independent budgets and outcome
-   tests, following ZAP's job/test separation.

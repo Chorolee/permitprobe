@@ -1,0 +1,96 @@
+"""One-shot orchestration of every deterministic, declared PermitProbe stage."""
+
+from pathlib import Path
+
+from permitprobe.api import check_api
+from permitprobe.baseline import Baseline, apply_baseline
+from permitprobe.handoff import check_handoff
+from permitprobe.openapi_inventory import inventory_openapi
+from permitprobe.policy import Policy, PolicyError
+from permitprobe.report import Report
+
+
+def _stage_status(report: Report, prefixes: tuple[str, ...], configured: bool) -> str:
+    if not configured:
+        return "skipped"
+    outcomes = [check.outcome for check in report.checks if check.code.startswith(prefixes)]
+    if not outcomes or "inconclusive" in outcomes:
+        return "inconclusive"
+    if "fail" in outcomes:
+        return "fail"
+    return "pass"
+
+
+def run_scan(
+    policy: Policy,
+    policy_dir: Path,
+    report: Report,
+    *,
+    openapi: Path | None = None,
+    gitleaks: str | None = None,
+    baseline: Baseline | None = None,
+) -> None:
+    """Run offline inventory, handoff inspection, and declared live GET checks once."""
+
+    if policy.api is None:
+        raise PolicyError("one-shot scan requires an API policy")
+    if openapi is not None:
+        inventory_openapi(policy.api, openapi, report)
+    if policy.handoff is not None:
+        check_handoff(policy.handoff, policy_dir, report, gitleaks)
+    handoff_incomplete = any(
+        check.code.startswith("handoff.") and check.outcome == "inconclusive"
+        for check in report.checks
+    )
+    if not handoff_incomplete:
+        check_api(policy.api, report)
+    if baseline is not None:
+        apply_baseline(report, baseline)
+
+    evidence = list(report.evidence.values())
+    report.scan = {
+        "schema_version": 1,
+        "mode": "declared_get_one_shot",
+        "stages": {
+            "openapi_inventory": {
+                "configured": openapi is not None,
+                "status": _stage_status(report, ("inventory.",), openapi is not None),
+            },
+            "live_get_checks": {
+                "configured": True,
+                "status": _stage_status(
+                    report,
+                    ("api.", "data.", "public.", "availability."),
+                    True,
+                ),
+            },
+            "handoff": {
+                "configured": policy.handoff is not None,
+                "status": _stage_status(report, ("handoff.",), policy.handoff is not None),
+            },
+            "known_finding_baseline": {
+                "configured": baseline is not None,
+                "status": (
+                    "inconclusive"
+                    if baseline is not None
+                    and report.baseline is not None
+                    and not report.baseline["policy_match"]
+                    else "applied"
+                    if baseline is not None
+                    else "skipped"
+                ),
+            },
+        },
+        "requests": {
+            "planned": len(report.planned_cases),
+            "observed": len(evidence),
+            "completed": sum(item.delivery == "complete" for item in evidence),
+            "failed": sum(item.delivery == "failed" for item in evidence),
+            "writes": 0,
+        },
+        "scope": {
+            "methods": ["GET"],
+            "automatic_discovery": False,
+            "redirects_followed": False,
+        },
+    }

@@ -112,6 +112,36 @@ Use `permitprobe schema` to print the policy's JSON Schema. Unknown policy keys,
 duplicate JSON keys, reused object IDs, and reused token references are rejected.
 `examples/permitprobe.json` is a complete configuration with synthetic placeholders.
 
+## Run one declared website assessment (unreleased; source checkout)
+
+`scan` is the one-command path through every deterministic surface declared for a site:
+
+```sh
+permitprobe scan my-security-checks/permitprobe.json \
+  --openapi my-security-checks/openapi.json \
+  --baseline my-security-checks/permitprobe-baseline.json \
+  --gitleaks .tools/gitleaks \
+  --report website-assessment.json
+```
+
+The stages run in one bounded assessment:
+
+1. Compare the optional local OpenAPI document with executable GET contracts.
+2. Inspect explicitly selected AI-handoff text when the policy declares it.
+3. Execute the declared authorization, public response, cache and latency GET checks.
+4. Classify exact reviewed findings through the optional baseline.
+5. Emit one exit code and one report with stage status, planned/observed request counts and
+   an explicit production-write count of zero.
+
+This is PermitProbe's current meaning of a one-shot website scan: one command covers the
+declared application surface without letting imported or discovered data expand execution.
+It does not crawl links, execute JavaScript, fuzz parameters, follow redirects or send writes.
+OpenAPI and handoff stages are optional and appear as `skipped` when absent. Future same-origin
+discovery must first produce reviewable proposals; discovery alone will not authorize requests.
+An invalid OpenAPI or baseline is rejected before the scan starts. An inconclusive declared
+handoff preflight also skips live delivery, so a partial local setup cannot look like a complete
+website assessment.
+
 ## Inventory an OpenAPI surface (unreleased; source checkout)
 
 Before running live checks, compare a local OpenAPI document with the GET resources that
@@ -458,7 +488,7 @@ These controls are a preflight check, not a sandbox for a malicious scanner exec
 | Overstep **1.5.0** | Generate identity/resource cases and classify unexpected access, including cross-owner access |
 | JSON Schema / `jsonschema` | Validate nested JSON response contracts |
 | Gitleaks **8.30.1** | Detect known secret patterns in captured handoff text |
-| PermitProbe | Strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
+| PermitProbe | One-shot orchestration of declared website checks, strict configuration, offline OpenAPI-to-policy GET inventory, explicit known-finding baselines, bounded GET transport, full owner-pair coverage, per-identity positive controls, public-route status/schema/cache/latency contracts, safe environment-backed request variants, model-neutral active exploration, evidence lineage and retests, object/collection checks, declared redirect grants and private-cache headers, success **and denial** response contracts, explicit file boundaries, and checked-byte bundles |
 
 The Gitleaks installer pins the release and archive hashes. `requirements.lock` records
 the tested Python dependency versions. Engine updates must pass the regression fixtures.
@@ -491,6 +521,8 @@ Reports still omit credential and request-header values, response bodies, query 
 redirect destinations and observed collection IDs. Unconfigured surfaces are named explicitly. An empty run cannot pass.
 Applied baseline summaries list known, new, unobserved and expired entry IDs without removing
 the underlying failure checks.
+One-shot reports additionally name each configured or skipped stage and record request counts,
+GET-only scope, disabled automatic discovery, disabled redirect following and zero writes.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. Declared redirect responses are checked from their headers only.
@@ -513,6 +545,8 @@ cookie jars are not used. Declared redirect responses are checked from their hea
   are trusted local inputs. Reports retain configured labels and filenames; do not put secrets
   in those names.
 - GET handlers must actually be safe to call. Choose a staging target with synthetic fixtures.
+- `scan` covers declared routes in one run; it is not a crawler or a claim of whole-internet-style
+  DAST coverage.
 
 ## Development
 
