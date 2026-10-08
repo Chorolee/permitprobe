@@ -4,6 +4,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 
 - Keep policy parsing strict and report exit codes 0/pass-or-reviewed-known,
   1/new violation, 2/inconclusive.
+- Preserve exact finite JSON numbers and valid Unicode when loading policies; policy digests and
+  response validators must see the same mathematical schema values.
 - Unknown outcomes and failed positive controls must never produce a clean run.
 - Reports contain labels and findings, not credentials, response bodies or scanned text.
 - Response-derived discovery labels remain reportable only through an explicit policy allowlist;

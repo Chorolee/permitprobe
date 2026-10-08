@@ -32,9 +32,10 @@ def test_exact_numbers_preserve_json_schema_integer_and_multiple_semantics():
     assert not list(validator.iter_errors(Decimal("1e100")))
 
 
-def test_extreme_json_number_is_rejected_without_decimal_arithmetic_failure():
+@pytest.mark.parametrize("raw", ["1e999999999", "0e-999999999"])
+def test_extreme_json_number_is_rejected_without_decimal_arithmetic_failure(raw):
     with pytest.raises(ValueError, match="too large"):
-        exact_json_loads("1e999999999")
+        exact_json_loads(raw)
 
 
 def test_authorization_response_validation_is_stopped_by_total_budget(monkeypatch):
