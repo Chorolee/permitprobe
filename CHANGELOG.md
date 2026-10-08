@@ -49,6 +49,8 @@ while it is in the `0.x` development series.
   target-delivery boundary.
 - Cookie credentials now require unambiguous request-header syntax and normalized pair-set
   uniqueness, so reordering or quoting the same session cannot bypass the distinct-subject check.
+- Resource policies now reject duplicate or conflicting rules for one role and reject anonymous
+  `own` scope before an ambiguous rule can widen the expected authorization result.
 - Checked bundles reject case-insensitive and Unicode-normalization path collisions, including
   aliases of the embedded manifest, before an ambiguous cross-platform ZIP can be published.
 - Handoff roots must now be canonical paths relative to the real policy file; traversal, absolute

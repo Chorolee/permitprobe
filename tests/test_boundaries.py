@@ -244,6 +244,15 @@ def test_reject_unsafe_resource_paths(path):
         lambda p: p["api"]["resources"][0]["response_schema"]["properties"].update(
             title={"$dynamicRef": "https://invalid.example/x"}
         ),
+        lambda p: p["api"]["resources"][0]["allow"].append(
+            {"role": "user", "scope": "own"}
+        ),
+        lambda p: p["api"]["resources"][0]["allow"].append(
+            {"role": "user", "scope": "any"}
+        ),
+        lambda p: p["api"]["resources"][0]["allow"].append(
+            {"role": "anonymous", "scope": "own"}
+        ),
         lambda p: p["api"]["resources"][0]["allow"].append({"role": "unknown"}),
     ],
 )
