@@ -38,6 +38,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   main checkout; a requested release tag is data and source evidence, never the verifier.
 - Scanner installation must hash-verify the complete archive before publishing a complete executable
   at a new path; never expose partial bytes or replace an existing scanner path.
+- Before every handoff scan, require the platform-specific official scanner binary digest and run a
+  private verified copy; a version string alone is not an executable trust boundary.
 - Resolve a release tag inside the trusted full-history checkout, require its commit to be an
   ancestor of main, and materialize that exact commit without running tag-controlled code.
 - Keep GitHub Actions pinned to full commit SHAs. Dependency updates must pass dependency review,

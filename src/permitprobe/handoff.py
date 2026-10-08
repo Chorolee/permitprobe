@@ -4,18 +4,38 @@ import fnmatch
 import hashlib
 import json
 import os
+import platform
 import re
 import shutil
 import stat
 import subprocess
 import tempfile
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
 
 from permitprobe.policy import Handoff
 from permitprobe.report import Report
 
 GITLEAKS_VERSION = "8.30.1"
+GITLEAKS_BINARIES = {
+    "linux_x64": (
+        "88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509",
+        21_958_840,
+    ),
+    "linux_arm64": (
+        "00e91bbe655bd7c47753e8cfe61cb76ea1a5d7e7702fe161ee40102b46b3823b",
+        20_775_096,
+    ),
+    "darwin_x64": (
+        "cee01fea7173f1b779dff188e1c26ecbcb4027d394acc573b23aaf0be260e291",
+        22_398_576,
+    ),
+    "darwin_arm64": (
+        "ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f",
+        21_324_882,
+    ),
+}
 RECEIPT_NAME = "PERMITPROBE-MANIFEST.json"
 PRIVATE_DIRS = {".git", ".ssh", ".aws", ".azure", ".kube", ".memory", ".venv"}
 PRIVATE_FILES = {".gitleaks.toml", ".gitleaksignore", "credentials", "id_rsa", "id_ed25519"}
@@ -117,30 +137,79 @@ def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, byte
     return snapshot
 
 
+def _scanner_target() -> str:
+    architecture = {
+        "x86_64": "x64",
+        "amd64": "x64",
+        "aarch64": "arm64",
+        "arm64": "arm64",
+    }.get(platform.machine().lower(), "unsupported")
+    return platform.system().lower() + "_" + architecture
+
+
+def _stage_verified_scanner(executable: str, work: Path) -> str:
+    expected = GITLEAKS_BINARIES.get(_scanner_target())
+    if expected is None:
+        raise ValueError("unsupported scanner platform")
+    expected_digest, expected_size = expected
+    source_path = Path(executable).resolve(strict=True)
+    staged_path = work / "gitleaks"
+    digest = hashlib.sha256()
+    try:
+        with ExitStack() as stack:
+            source_fd = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            source = stack.enter_context(os.fdopen(source_fd, "rb"))
+            info = os.fstat(source.fileno())
+            if not stat.S_ISREG(info.st_mode) or info.st_size != expected_size:
+                raise ValueError("unexpected scanner file")
+            staged_fd = os.open(staged_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o500)
+            staged = stack.enter_context(os.fdopen(staged_fd, "wb"))
+            while chunk := source.read(1024 * 1024):
+                digest.update(chunk)
+                staged.write(chunk)
+            os.fchmod(staged.fileno(), 0o500)
+    except Exception:
+        staged_path.unlink(missing_ok=True)
+        raise
+    if digest.hexdigest() != expected_digest:
+        staged_path.unlink(missing_ok=True)
+        raise ValueError("unexpected scanner digest")
+    return str(staged_path)
+
+
 def scan(snapshot: dict[str, bytes], report: Report, binary: str | None = None) -> None:
     executable = shutil.which(binary or "gitleaks")
     if not executable:
         report.add("handoff.scanner", "inconclusive", "handoff", "Gitleaks 8.30.1 is required.")
         return
-    executable = str(Path(executable).resolve())
-    # No cloud/database/agent credentials, scanner config overrides, or proxy vars.
-    env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
-    try:
-        # The scanner path is resolved explicitly and its version is checked below.
-        result = subprocess.run(  # noqa: S603
-            [executable, "version"], env=env, capture_output=True, timeout=10, check=False
-        )
-        if (
-            result.returncode
-            or result.stdout.decode().strip().removeprefix("v") != GITLEAKS_VERSION
-        ):
-            raise ValueError("unsupported scanner")
-    except (OSError, ValueError, subprocess.TimeoutExpired):
-        report.add("handoff.scanner", "inconclusive", "handoff", "Cannot verify Gitleaks 8.30.1.")
-        return
-    report.engines["gitleaks"] = GITLEAKS_VERSION
     with tempfile.TemporaryDirectory(prefix="permitprobe-scan-") as directory:
         work = Path(directory)
+        # Copy only a hash-pinned official binary into the private work directory.
+        # Later path replacement cannot change the executable used for this scan.
+        try:
+            executable = _stage_verified_scanner(executable, work)
+            env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
+            result = subprocess.run(  # noqa: S603
+                [executable, "version"],
+                env=env,
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if (
+                result.returncode
+                or result.stdout.decode().strip().removeprefix("v") != GITLEAKS_VERSION
+            ):
+                raise ValueError("unsupported scanner")
+        except (OSError, ValueError, subprocess.TimeoutExpired):
+            report.add(
+                "handoff.scanner",
+                "inconclusive",
+                "handoff",
+                "Cannot verify the official Gitleaks 8.30.1 binary.",
+            )
+            return
+        report.engines["gitleaks"] = GITLEAKS_VERSION
         source = work / "files"
         source.mkdir()
         names = {}

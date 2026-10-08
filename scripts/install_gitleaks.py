@@ -18,6 +18,24 @@ HASHES = {
     "darwin_x64": "dfe101a4db2255fc85120ac7f3d25e4342c3c20cf749f2c20a18081af1952709",
     "darwin_arm64": "b40ab0ae55c505963e365f271a8d3846efbc170aa17f2607f13df610a9aeb6a5",
 }
+BINARY_HASHES = {
+    "linux_x64": (
+        "88f91962aa2f93ac6ab281d553b9e125f5197bbbce38f9f2437f7299c32e5509",
+        21_958_840,
+    ),
+    "linux_arm64": (
+        "00e91bbe655bd7c47753e8cfe61cb76ea1a5d7e7702fe161ee40102b46b3823b",
+        20_775_096,
+    ),
+    "darwin_x64": (
+        "cee01fea7173f1b779dff188e1c26ecbcb4027d394acc573b23aaf0be260e291",
+        22_398_576,
+    ),
+    "darwin_arm64": (
+        "ba52fb1bfabbcde42f032afad3d6e0b19dff8ed105229a16e7caa338bbc0e84f",
+        21_324_882,
+    ),
+}
 
 
 def publish_binary(binary: bytes, output: Path) -> None:
@@ -59,11 +77,14 @@ def main():
         if not member.isfile() or member.size > 100_000_000:
             parser.error("Unexpected archive member.")
         binary = archive.extractfile(member).read()
+    binary_digest, binary_size = BINARY_HASHES[target]
+    if len(binary) != binary_size or hashlib.sha256(binary).hexdigest() != binary_digest:
+        parser.error("Scanner binary SHA256 does not match the pinned release.")
     try:
         publish_binary(binary, args.output)
     except OSError:
         parser.error("Cannot publish the verified scanner at a new output path.")
-    print(f"Installed Gitleaks {VERSION}; pinned archive SHA256 verified.")
+    print(f"Installed Gitleaks {VERSION}; pinned archive and binary SHA256 verified.")
 
 
 if __name__ == "__main__":

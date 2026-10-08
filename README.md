@@ -49,7 +49,8 @@ python -m pip install 'permitprobe==0.3.0'
 permitprobe --version
 ```
 
-The full demos and handoff checks also require Gitleaks 8.30.1. The source-checkout
+The full demos and handoff checks also require the official Gitleaks 8.30.1 binary. PermitProbe
+verifies its platform-specific executable digest before every scan. The source-checkout
 instructions below install the pinned scanner. Release maintainers can follow the
 [Trusted Publishing guide](CONTRIBUTING.md#publishing-a-verified-github-release-to-pypi).
 
