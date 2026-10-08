@@ -3,7 +3,7 @@
 All notable changes to PermitProbe are recorded here. The project uses semantic versioning
 while it is in the `0.x` development series.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-09
 
 ### Added
 
@@ -20,6 +20,12 @@ while it is in the `0.x` development series.
   normalized-origin equality, while cross-origin linked reads remain credential-free. Finding
   retests require both source controls and the relevant linked allow controls before declaring a
   violation fixed.
+
+### Compatibility
+
+- The policy format remains version 1 and the report schema remains version 2. Existing v0.2.1
+  policies remain valid; replay and linked-read execution require explicit new commands or policy
+  declarations.
 
 ## [0.2.1] - 2026-10-08
 
@@ -101,6 +107,7 @@ while it is in the `0.x` development series.
 
 - Initial authorization, response-schema and selected handoff boundary checks.
 
+[0.3.0]: https://github.com/Chorolee/permitprobe/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Chorolee/permitprobe/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Chorolee/permitprobe/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/Chorolee/permitprobe/compare/v0.1.0...v0.1.1

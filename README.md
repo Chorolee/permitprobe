@@ -9,7 +9,7 @@ Security Maintainer: Susan (@Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
 License: Apache-2.0<br>
-Current release: [v0.2.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.2.1)
+Current release: [v0.3.0](https://github.com/Chorolee/permitprobe/releases/tag/v0.3.0)
 
 PermitProbe helps service operators validate:
 
@@ -18,6 +18,8 @@ PermitProbe helps service operators validate:
 - public-route response, cache, and fail-fast boundaries
 - OpenAPI GET-operation coverage against executable checks
 - bounded same-origin route proposals from fixed public sources
+- deterministic replay of completed exploration cases
+- anonymous and authenticated linked-route authorization boundaries
 - reviewed known findings versus new regressions
 - secrets included in AI handoff files
 
@@ -31,10 +33,11 @@ It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization 
 classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
 contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
 
-Version **0.2.1** supports GET-only JSON REST APIs, one-shot declared website assessments and
+Version **0.3.0** supports GET-only JSON REST APIs, one-shot declared website assessments and
 explicit UTF-8 text-file handoffs on Linux/macOS. It includes the public-route, inventory,
-baseline, exploration, retest and proposal-discovery capabilities documented below. See the
-[changelog](CHANGELOG.md) and [v0.2.1 release notes](docs/releases/v0.2.1.md). A passing result
+baseline, exploration, replay, retest, linked-read and proposal-discovery capabilities documented
+below. See the [changelog](CHANGELOG.md) and
+[v0.3.0 release notes](docs/releases/v0.3.0.md). A passing result
 applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
@@ -42,7 +45,7 @@ applies only to the declared cases and scanned bytes.
 Install the Python package from [PyPI](https://pypi.org/project/permitprobe/) (Python 3.11+):
 
 ```sh
-python -m pip install 'permitprobe==0.2.1'
+python -m pip install 'permitprobe==0.3.0'
 permitprobe --version
 ```
 
@@ -374,7 +377,7 @@ override `no-store`. The rule checks headers only; actual cache behavior remains
 unverified. See [RFC 9111](https://www.rfc-editor.org/rfc/rfc9111.html#section-5.2.2).
 Denial responses do not run this optional header check.
 
-## Linked API/storage read boundaries (unreleased)
+## Linked API/storage read boundaries
 
 A private object can be protected by its API while a direct edge or storage route remains public.
 Declare the direct route separately and bind it to the protected source object:
@@ -495,7 +498,7 @@ every round. Its graph distinguishes subjects, resources, planned cases, hypothe
 observations, capability proposals and findings. Broken provider output, a timeout, repeated or
 unknown cases, missing evidence dependencies and exceeded budgets stop inconclusively.
 
-## Replay an exploration without AI (unreleased)
+## Replay an exploration without AI
 
 Turn an exploration report or its private checkpoint into a small deterministic manifest:
 
@@ -678,7 +681,7 @@ total deadline.
   not supported. Denial responses must also be valid JSON matching their declared schema.
 - These observations are **not** a proof of database grants, RLS, complete storage/bucket policy,
   GraphQL, intermediary cache behavior, or write-path correctness. Cache checks cover response
-  headers only. The tool never connects to a database in v0.2.
+  headers only. The tool never connects to a database in v0.3.
 - Linked reads test status-level access to exact seeded object paths, anonymously or with the
   source identities on the exact primary origin. They do not validate returned body identity,
   signed-token cryptography or expiry, enumerate a bucket, use a storage service credential, or
@@ -718,8 +721,7 @@ deployed application automatically.
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
 
 These remaining items are **not implemented**. Finding history and bounded active exploration are
-in v0.2; sanitized case replay and linked API/storage reads are implemented on `main` for the next
-release.
+available from v0.2; sanitized case replay and linked API/storage reads are available from v0.3.
 Each remaining addition needs a known-vulnerable fixture, a fixed counterpart, and an
 incomplete-evidence case that must not pass.
 
