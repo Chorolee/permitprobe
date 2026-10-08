@@ -13,11 +13,11 @@ import permitprobe.api as api_module
 import permitprobe.public_contracts as public_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
-from permitprobe.policy import Policy, ResponseCookieContract, api_contract_digest
+from permitprobe.policy import CORSContract, Policy, ResponseCookieContract, api_contract_digest
 from permitprobe.report import Report
 from permitprobe.retest import run_retest
 from permitprobe.scan import run_scan
-from permitprobe.web_security import cookie_results, cors_origin_key
+from permitprobe.web_security import cookie_results, cors_origin_key, cors_results
 
 ATTACKER_COOKIE = "session=synthetic-attacker-shape"
 TRUSTED_ORIGIN = "https://trusted.example.invalid"
@@ -501,6 +501,37 @@ def test_cors_vary_wildcard_satisfies_cache_separation(monkeypatch):
         report = Report()
         check_api(Policy.model_validate(secured_public_policy(url)).api, report)
     assert report.exit_code == 0, report.to_dict()
+
+
+@pytest.mark.parametrize(
+    "vary,expected",
+    [
+        ("Origin", "pass"),
+        ("Accept-Encoding, oRiGiN", "pass"),
+        ("*", "pass"),
+        ("Origin,", "pass"),
+        ("Origin, @invalid", "fail"),
+        ("Origin;parameter", "fail"),
+        ("Accept-Encoding", "fail"),
+        ("," * 33 + "Origin", "fail"),
+    ],
+)
+def test_cors_vary_requires_a_bounded_valid_field_name_list(vary, expected):
+    contract = CORSContract(allow_variants=["trusted"], allow_credentials=True)
+    [(code, outcome, _)] = cors_results(
+        contract,
+        "trusted",
+        {"Origin": TRUSTED_ORIGIN},
+        httpx.Headers(
+            {
+                "Access-Control-Allow-Origin": TRUSTED_ORIGIN,
+                "Access-Control-Allow-Credentials": "true",
+                "Vary": vary,
+            }
+        ),
+    )
+    assert code == "web.cors"
+    assert outcome == expected
 
 
 def test_unknown_cookie_flag_does_not_hide_declared_attributes(monkeypatch):

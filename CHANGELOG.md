@@ -46,6 +46,8 @@ while it is in the `0.x` development series.
   current Secure/HttpOnly invariants for `__Http-` and `__Host-Http-` cookie declarations.
 - CORS request variants now support the exact opaque serialized Origin `null`, allowing sandboxed
   and other opaque-origin access to be classified explicitly with the same byte-exact response rule.
+- CORS cache separation now requires the complete bounded `Vary` value to be a valid HTTP
+  field-name list, so an `Origin` prefix cannot hide malformed remainder bytes.
 - The pinned Gitleaks installer now publishes verified bytes atomically with executable permissions
   and refuses to replace an existing path, leaving no partial scanner after a failed publication.
 - HSTS validation compares unbounded RFC delta-seconds as decimal strings, preventing oversized

@@ -33,9 +33,13 @@ _SF_KEY = re.compile(r"[a-z*][a-z0-9_.*-]{0,63}")
 _SF_TOKEN = re.compile(_SF_WORD)
 _SF_NUMBER = re.compile(r"-?(?:[0-9]{1,12}\.[0-9]{1,3}|[0-9]{1,15})")
 _SF_BINARY = re.compile(r":[A-Za-z0-9+/]*={0,2}:")
+_HTTP_FIELD_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
 _MAX_PERMISSIONS_POLICY_BYTES = 8_192
 _MAX_PERMISSIONS_POLICY_MEMBERS = 128
 _MAX_PERMISSIONS_POLICY_ITEMS = 64
+_MAX_VARY_BYTES = 8_192
+_MAX_VARY_MEMBERS = 128
+_MAX_VARY_EMPTY_MEMBERS = 32
 
 
 def _values(headers: httpx.Headers, name: str) -> list[str]:
@@ -494,11 +498,26 @@ def _header_value(headers: dict[str, str], name: str) -> str | None:
 
 
 def _vary_has_origin(headers: httpx.Headers) -> bool:
-    return any(
-        token.strip().lower() in ("origin", "*")
-        for value in _values(headers, "Vary")
-        for token in value.split(",")
-    )
+    values = _values(headers, "Vary")
+    if sum(len(value) for value in values) > _MAX_VARY_BYTES:
+        return False
+    members = 0
+    empty_members = 0
+    covers_origin = False
+    for value in values:
+        for raw in value.split(","):
+            token = raw.strip(" \t")
+            if not token:
+                empty_members += 1
+                if empty_members > _MAX_VARY_EMPTY_MEMBERS:
+                    return False
+                continue
+            members += 1
+            if members > _MAX_VARY_MEMBERS or _HTTP_FIELD_NAME.fullmatch(token) is None:
+                return False
+            if token.lower() in ("origin", "*"):
+                covers_origin = True
+    return members > 0 and covers_origin
 
 
 def cors_results(
