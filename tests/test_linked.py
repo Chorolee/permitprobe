@@ -89,6 +89,77 @@ def test_linked_reads_ignore_proxy_environment(monkeypatch):
     assert len(storage_requests) == 2
 
 
+@pytest.mark.parametrize(
+    "scenario,expected,failures",
+    [("authenticated-safe", 0, 0), ("authenticated-leak", 1, 2)],
+)
+def test_same_origin_linked_route_mirrors_source_authorization(
+    scenario, expected, failures
+):
+    with linked_servers(scenario) as (api, storage, api_requests, storage_requests):
+        with linked_environment():
+            report = Report()
+            check_api(
+                Policy.model_validate(
+                    linked_policy(api, storage, "source_subjects")
+                ).api,
+                report,
+            )
+    payload = report.to_dict()
+    assert report.exit_code == expected, payload
+    assert len(api_requests) == 6
+    assert len(api_requests.linked_requests) == 6
+    assert not storage_requests
+    assert payload["coverage"] == {"planned": 12, "observed": 12, "unprobed": []}
+    assert sum(
+        check.code == "linked.authorization" and check.outcome == "fail"
+        for check in report.checks
+    ) == failures
+    anonymous = [headers for subject, _, headers in api_requests.linked_requests if subject is None]
+    assert len(anonymous) == 2
+    assert all("Authorization" not in headers and "Cookie" not in headers for headers in anonymous)
+    assert any(
+        headers.get("Authorization") == "Bearer " + TOKENS["PP_LINKED_ALICE_TOKEN"]
+        for _, _, headers in api_requests.linked_requests
+    )
+    assert any(
+        headers.get("Cookie") == TOKENS["PP_LINKED_BOB_COOKIE"]
+        for _, _, headers in api_requests.linked_requests
+    )
+    assert PRIVATE_BODY not in json.dumps(payload)
+
+
+def test_authenticated_linked_denial_requires_source_and_caller_controls():
+    with linked_servers("source-missing") as (api, storage, api_requests, _):
+        with linked_environment():
+            report = Report()
+            check_api(
+                Policy.model_validate(
+                    linked_policy(api, storage, "source_subjects")
+                ).api,
+                report,
+            )
+    assert report.exit_code == 2
+    assert len(api_requests.linked_requests) == 6
+    assert any(check.code == "linked.source_control" for check in report.checks)
+
+
+def test_mutated_cross_origin_authenticated_contract_sends_nothing():
+    with linked_servers("authenticated-safe") as (api, storage, api_requests, storage_requests):
+        config = Policy.model_validate(
+            linked_policy(api, storage, "source_subjects")
+        ).api
+        config.linked_resources[0].origin = storage
+        with linked_environment():
+            report = Report()
+            check_api(config, report)
+    assert report.exit_code == 2
+    assert not api_requests
+    assert not api_requests.linked_requests
+    assert not storage_requests
+    assert any(check.code == "linked.configuration" for check in report.checks)
+
+
 def test_redirect_source_control_can_establish_linked_objects():
     with linked_servers("safe") as (_, storage, _, storage_requests):
         with read_server("safe") as (api, api_requests), read_environment():
@@ -144,6 +215,9 @@ def _add_function_source(policy):
         lambda p: p["api"]["linked_resources"][0].update(
             origin="http://objects.example.invalid"
         ),
+        lambda p: p["api"]["linked_resources"][0].update(
+            authentication="source_subjects"
+        ),
         lambda p: p["api"]["linked_resources"][0].update(name="private-documents"),
         lambda p: p["api"]["linked_resources"][0].update(denial_statuses=[404, 404]),
         lambda p: p["api"]["linked_resources"][0].update(denial_statuses=[200]),
@@ -166,6 +240,11 @@ def test_empty_linked_default_preserves_existing_digest_and_normalizes_origins()
     )
 
     implicit_port = Policy.model_validate(linked_policy()).api
+    legacy_anonymous = linked_policy()
+    legacy_anonymous["api"]["linked_resources"][0].pop("authentication")
+    assert api_contract_digest(implicit_port) == api_contract_digest(
+        Policy.model_validate(legacy_anonymous).api
+    )
     explicit_port = Policy.model_validate(
         linked_policy(storage_origin="https://objects.example.invalid:443")
     ).api
@@ -174,10 +253,41 @@ def test_empty_linked_default_preserves_existing_digest_and_normalizes_origins()
     ).api
     assert api_contract_digest(implicit_port) == api_contract_digest(explicit_port)
     assert api_contract_digest(implicit_port) != api_contract_digest(other)
+    authenticated = Policy.model_validate(
+        linked_policy(authentication="source_subjects")
+    ).api
+    assert api_contract_digest(implicit_port) != api_contract_digest(authenticated)
     assert api_contract_digest(implicit_port, include_linked=False) == api_contract_digest(
         Policy.model_validate(without).api,
         include_linked=False,
     )
+
+
+def test_anonymous_linked_report_contract_remains_compatible():
+    with linked_servers("safe") as (api, storage, _, _), linked_environment():
+        report = Report()
+        check_api(Policy.model_validate(linked_policy(api, storage)).api, report)
+    linked_plans = [
+        item
+        for item in report.planned_cases.values()
+        if item.get("case_type") == "linked_read"
+    ]
+    linked_evidence = [
+        item for item in report.evidence.values() if item.evidence_id.startswith("ppl-")
+    ]
+    assert [item["case_id"] for item in linked_plans] == [
+        "ppl-c76e5b9c41542819b033",
+        "ppl-2e1d3908a9725bfe02bc",
+    ]
+    assert all("authentication" not in item for item in linked_plans)
+    assert all(item["subject"] == "anonymous" for item in linked_plans)
+    assert all(item.subject == "anonymous" for item in linked_evidence)
+    assert [
+        check.target for check in report.checks if check.code == "linked.public_access"
+    ] == [
+        "direct-private-documents/anonymous/alice",
+        "direct-private-documents/anonymous/bob",
+    ]
 
 
 def test_linked_finding_retest_uses_source_controls_and_can_be_fixed():
@@ -205,6 +315,119 @@ def test_linked_finding_retest_uses_source_controls_and_can_be_fixed():
     assert len(storage_requests) == 2
     assert result["report"]["exit_code"] == 0
     assert len(result["selected_case_ids"]) == 4
+
+
+def test_authenticated_linked_finding_retest_uses_both_caller_controls():
+    with linked_servers("authenticated-leak") as (
+        api,
+        storage,
+        api_requests,
+        storage_requests,
+    ):
+        with linked_environment():
+            config = Policy.model_validate(
+                linked_policy(api, storage, "source_subjects")
+            ).api
+            original = Report()
+            check_api(config, original)
+            finding = next(
+                item
+                for item in original.finding_groups()
+                if item["code"] == "linked.authorization"
+            )
+            api_requests.clear()
+            api_requests.linked_requests.clear()
+            storage_requests.active_scenario = "authenticated-safe"
+            verdict, result = run_retest(
+                config,
+                original.to_dict(),
+                finding["finding_id"],
+                change_ref="deploy:alternate-route-owner-check",
+            )
+    assert verdict == "fixed"
+    assert len(api_requests) == 2
+    assert not storage_requests
+    assert result["report"]["exit_code"] == 0
+    assert len(api_requests.linked_requests) == 4
+    assert len(result["selected_case_ids"]) == 6
+
+
+def test_authenticated_linked_retest_requires_linked_positive_controls():
+    with linked_servers("authenticated-leak") as (
+        api,
+        storage,
+        api_requests,
+        storage_requests,
+    ):
+        with linked_environment():
+            config = Policy.model_validate(
+                linked_policy(api, storage, "source_subjects")
+            ).api
+            original = Report()
+            check_api(config, original)
+            finding = next(
+                item
+                for item in original.finding_groups()
+                if item["code"] == "linked.authorization"
+            )
+            api_requests.clear()
+            api_requests.linked_requests.clear()
+            storage_requests.active_scenario = "authenticated-deny-all"
+            verdict, result = run_retest(
+                config,
+                original.to_dict(),
+                finding["finding_id"],
+                change_ref="deploy:alternate-route-deny-all",
+            )
+    assert verdict == "inconclusive"
+    assert len(api_requests) == 2
+    assert len(api_requests.linked_requests) == 4
+    assert not storage_requests
+    assert result["report"]["exit_code"] == 2
+    assert any(
+        check["code"] == "linked.positive_control"
+        for check in result["report"]["checks"]
+    )
+    assert len(result["selected_case_ids"]) == 6
+
+
+def test_authenticated_linked_retest_enforces_combined_case_budget():
+    with linked_servers("authenticated-public-leak") as (
+        api,
+        storage,
+        api_requests,
+        storage_requests,
+    ):
+        with linked_environment():
+            config = Policy.model_validate(
+                linked_policy(api, storage, "source_subjects")
+            ).api
+            original = Report()
+            check_api(config, original)
+            finding = next(
+                item
+                for item in original.finding_groups()
+                if item["code"] == "linked.authorization"
+            )
+            config.max_cases = 6
+            api_requests.clear()
+            api_requests.linked_requests.clear()
+            verdict, result = run_retest(
+                config,
+                original.to_dict(),
+                finding["finding_id"],
+                change_ref="deploy:alternate-route-owner-check",
+            )
+    assert verdict == "inconclusive"
+    assert not api_requests
+    assert not api_requests.linked_requests
+    assert not storage_requests
+    assert result["report"]["exit_code"] == 2
+    assert any(
+        check["code"] == "api.coverage" and check["outcome"] == "inconclusive"
+        for check in result["report"]["checks"]
+    )
+    assert len(result["selected_case_ids"]) == 8
 
 
 def test_linked_retest_refuses_a_different_origin_before_delivery():
@@ -244,6 +467,8 @@ def test_one_shot_scan_counts_linked_reads_and_zero_writes(tmp_path):
     assert report.scan["stages"]["linked_reads"] == {"configured": True, "status": "pass"}
     assert report.scan["scope"]["linked_read_contracts"] == 1
     assert report.scan["scope"]["linked_credentials_forwarded"] is False
+    assert report.scan["scope"]["linked_same_origin_credentials_used"] is False
+    assert report.scan["scope"]["linked_cross_origin_credentials_forwarded"] is False
     assert report.scan["scope"]["linked_response_bodies_consumed"] is False
     assert report.scan["requests"] == {
         "planned": 8,
@@ -254,8 +479,35 @@ def test_one_shot_scan_counts_linked_reads_and_zero_writes(tmp_path):
     }
 
 
+def test_one_shot_scan_records_same_origin_credential_scope(tmp_path):
+    with linked_servers("authenticated-safe") as (api, storage, api_requests, _):
+        with linked_environment():
+            report = Report()
+            run_scan(
+                Policy.model_validate(
+                    linked_policy(api, storage, "source_subjects")
+                ),
+                tmp_path,
+                report,
+            )
+    assert report.exit_code == 0
+    assert len(api_requests) == 6
+    assert len(api_requests.linked_requests) == 6
+    assert report.scan["scope"]["linked_credentials_forwarded"] is True
+    assert report.scan["scope"]["linked_same_origin_credentials_used"] is True
+    assert report.scan["scope"]["linked_cross_origin_credentials_forwarded"] is False
+    assert report.scan["scope"]["linked_response_bodies_consumed"] is False
+
+
 @pytest.mark.parametrize(
-    "scenario,expected", [("safe", 0), ("public-leak", 1), ("redirect", 2)]
+    "scenario,expected",
+    [
+        ("safe", 0),
+        ("public-leak", 1),
+        ("redirect", 2),
+        ("authenticated-safe", 0),
+        ("authenticated-leak", 1),
+    ],
 )
 def test_linked_demo_cli(scenario, expected, capsys):
     assert main(["demo-linked", "--scenario", scenario, "--format", "json"]) == expected

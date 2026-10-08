@@ -12,9 +12,14 @@ while it is in the `0.x` development series.
   reruns the exact deterministic baseline and completed exploration cases without invoking an AI
   provider or storing URLs, credentials, headers or response bodies.
 - Linked API/storage read contracts anonymously probe a pinned direct-object origin after the
-  protected source API establishes each seeded object. Primary credentials are never forwarded,
-  response bodies are never consumed, redirects are never followed, and a denial cannot pass when
-  its source positive control failed.
+  protected source API establishes each seeded object. Anonymous contracts never forward primary
+  credentials; response bodies are never consumed, redirects are never followed, and a denial
+  cannot pass when its source positive control failed.
+- Same-origin linked routes can opt into `source_subjects` authentication to replay the source
+  object's full caller/owner matrix. Bearer or cookie credentials are forwarded only after exact
+  normalized-origin equality, while cross-origin linked reads remain credential-free. Finding
+  retests require both source controls and the relevant linked allow controls before declaring a
+  violation fixed.
 
 ## [0.2.1] - 2026-10-08
 

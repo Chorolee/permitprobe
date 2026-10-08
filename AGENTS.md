@@ -34,5 +34,6 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   target origin, require the exact deterministic baseline, revalidate every ID against the current
   policy catalogue, invoke no provider, and preserve the GET-only zero-write boundary.
 - Linked read checks must use an explicitly pinned origin and a protected source-object control.
-  Never forward primary credentials, follow redirects, consume linked response bodies, or call a
-  linked denial safe when the corresponding source object was not established.
+  Forward primary credentials only for explicit `source_subjects` checks at the exact normalized
+  primary origin. Never forward them cross-origin, follow redirects, consume linked response
+  bodies, or call a denial safe when its object/caller controls were not established.

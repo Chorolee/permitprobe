@@ -136,7 +136,8 @@ The stages run in one bounded assessment:
 3. Read the fixed anonymous discovery sources when `api.discovery` is declared and propose
    same-origin paths that lack a check contract.
 4. Execute the declared authorization, public response, cache and latency GET checks.
-5. Probe any declared linked edge/storage reads without forwarding credentials or reading bodies.
+5. Probe declared linked edge/storage reads without cross-origin credential forwarding or consuming
+   response bodies.
 6. Classify exact reviewed findings through the optional baseline.
 7. Emit one exit code and one report with stage status, planned/observed request counts and
    an explicit production-write count of zero.
@@ -385,6 +386,7 @@ Declare the direct route separately and bind it to the protected source object:
     "source_resource": "private-documents",
     "origin": "https://objects.example.invalid",
     "path": "/objects/{id}.pdf",
+    "authentication": "anonymous",
     "denial_statuses": [403, 404]
   }
 ]
@@ -397,13 +399,21 @@ declared owner. Any `2xx` is `linked.public_access`; a declared `401`, `403`, `4
 only when the source control succeeded. Redirects, server errors, delivery failures and denials
 without a valid source control remain inconclusive.
 
-Primary Authorization and Cookie values are never sent to the linked origin. The linked request
-uses a new client, ignores proxy environment variables, never follows a redirect, never reuses
-`Set-Cookie`, and closes after response headers without consuming a potentially private or binary
-body. The origin, object value, body, redirect destination and headers stay out of reports. Linked
-cases count toward `max_cases`, participate in one-shot `scan`, known-finding baselines and finding
-retests. A same-origin linked route participates in local OpenAPI coverage inventory; a separate
-storage origin remains outside the primary API document's inventory.
+For a second API route at the exact same normalized origin, set `authentication` to
+`source_subjects`. PermitProbe mirrors the source resource's complete anonymous and authenticated
+caller/owner matrix. It forwards each subject's usual bearer or cookie credential only to that
+same origin, treats a forbidden `2xx` as `linked.authorization`, and requires successful object and
+caller controls before a denial can pass. A cross-origin `source_subjects` contract is invalid.
+
+Cross-origin linked reads never receive primary Authorization or Cookie values. Every linked
+request uses a new client, ignores proxy environment variables, never follows a redirect, never
+reuses `Set-Cookie`, and closes after response headers without consuming a potentially private or
+binary body. The origin, object value, body, redirect destination and headers stay out of reports.
+Linked cases count toward `max_cases`, participate in one-shot `scan`, known-finding baselines and
+finding retests. A same-origin linked route participates in local OpenAPI coverage inventory; a
+separate storage origin remains outside the primary API document's inventory.
+Authenticated finding retests rerun the relevant source controls and same-origin linked allow
+controls; a route that starts denying every request is inconclusive rather than fixed.
 
 Run the loopback fixtures without external credentials:
 
@@ -411,6 +421,8 @@ Run the loopback fixtures without external credentials:
 permitprobe demo-linked --scenario safe         # exit 0
 permitprobe demo-linked --scenario public-leak  # exit 1
 permitprobe demo-linked --scenario redirect     # exit 2
+permitprobe demo-linked --scenario authenticated-safe  # exit 0
+permitprobe demo-linked --scenario authenticated-leak  # exit 1
 ```
 
 [examples/linked-reads.json](examples/linked-reads.json) contains the complete synthetic contract.
@@ -641,7 +653,7 @@ the underlying failure checks.
 One-shot reports additionally name each configured or skipped stage and record request counts,
 GET-only scope, optional proposal discovery, disabled automatic expansion, disabled redirect
 following, linked-read contract counts, disabled credential forwarding/body consumption for linked
-origins, and zero writes.
+cross-origin checks, explicit same-origin credential use, and zero writes.
 Responses are consumed only in memory and capped in size/time. Proxy environment variables,
 redirect following, automatic login, fixture mutations by `check`, and shared cross-identity
 cookie jars are not used. `api.validation_timeout_ms` additionally caps the cumulative local
@@ -667,7 +679,8 @@ total deadline.
 - These observations are **not** a proof of database grants, RLS, complete storage/bucket policy,
   GraphQL, intermediary cache behavior, or write-path correctness. Cache checks cover response
   headers only. The tool never connects to a database in v0.2.
-- Linked reads test anonymous reachability of exact seeded object paths. They do not validate
+- Linked reads test status-level access to exact seeded object paths, anonymously or with the
+  source identities on the exact primary origin. They do not validate returned body identity,
   signed-token cryptography or expiry, enumerate a bucket, use a storage service credential, or
   infer access rules for undeclared objects.
 - Handoff scanning covers selected UTF-8 text only. It is not complete PII classification,
@@ -701,7 +714,6 @@ deployed application automatically.
 | Planned capability | Concrete question it would test |
 | --- | --- |
 | Declared datastore adapter | Can one authenticated user directly read another user's private row, even if the HTTP API denies it? |
-| Authenticated linked-route cases | Does a second declared API route enforce the same owner boundary for other signed-in users? |
 | Write authorization cases | Can a user modify or delete another user's seeded test record? Run against disposable test data with explicit write-test scope. |
 | MCP adapter | Can an agent identity invoke a tool or name a resource outside its declared permissions? |
 

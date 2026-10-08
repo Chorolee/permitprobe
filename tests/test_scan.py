@@ -83,6 +83,8 @@ def test_one_shot_scan_runs_inventory_live_api_and_handoff(tmp_path, scanner, ca
             "redirects_followed": False,
             "linked_read_contracts": 0,
             "linked_credentials_forwarded": False,
+            "linked_same_origin_credentials_used": False,
+            "linked_cross_origin_credentials_forwarded": False,
             "linked_response_bodies_consumed": False,
         },
     }
