@@ -318,7 +318,7 @@
     },
     "LinkedResource": {
       "additionalProperties": false,
-      "description": "Anonymous direct-read check tied to a protected source object.",
+      "description": "Status-only alternate read tied to a protected source object.",
       "properties": {
         "name": {
           "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
@@ -339,6 +339,15 @@
           "maxLength": 512,
           "minLength": 1,
           "title": "Path",
+          "type": "string"
+        },
+        "authentication": {
+          "default": "anonymous",
+          "enum": [
+            "anonymous",
+            "source_subjects"
+          ],
+          "title": "Authentication",
           "type": "string"
         },
         "denial_statuses": {

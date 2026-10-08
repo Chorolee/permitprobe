@@ -19,6 +19,7 @@ from permitprobe.api import (
 from permitprobe.linked import (
     execute_linked_cases,
     linked_case_descriptor,
+    linked_control_cases,
     prepare_linked,
     source_control_cases,
 )
@@ -284,20 +285,33 @@ def run_retest(
                         "finding evidence is not present in the current policy"
                     ) from None
                 controls = source_control_cases(prepared, linked_cases)
-                selected = [*controls, *linked_cases]
+                linked_controls = linked_control_cases(prepared_linked, linked_cases)
+                selected_linked = [*linked_controls, *linked_cases]
+                selected = [*controls, *selected_linked]
                 report.planned_cases = {
                     **{case.id: case_descriptor(case) for case in controls},
-                    **{case.id: linked_case_descriptor(case) for case in linked_cases},
+                    **{
+                        case.id: linked_case_descriptor(case)
+                        for case in selected_linked
+                    },
                 }
-                observations = execute_api_cases(prepared, controls, report)
-                finalize_api(
-                    prepared,
-                    controls,
-                    observations,
-                    report,
-                    require_full_coverage=False,
-                )
-                execute_linked_cases(prepared_linked, linked_cases, report)
+                if len(selected) > config.max_cases:
+                    report.add(
+                        "api.coverage",
+                        "inconclusive",
+                        "api",
+                        "The retest control plan exceeds max_cases.",
+                    )
+                else:
+                    observations = execute_api_cases(prepared, controls, report)
+                    finalize_api(
+                        prepared,
+                        controls,
+                        observations,
+                        report,
+                        require_full_coverage=False,
+                    )
+                    execute_linked_cases(prepared_linked, selected_linked, report)
                 verdict = "inconclusive"
     elif is_public:
         prepared_public = prepare_public(config, report) if config.public_resources else None

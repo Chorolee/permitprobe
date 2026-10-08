@@ -18,7 +18,7 @@
       {
         "name": "bob",
         "role": "member",
-        "token_env": "PP_LINKED_BOB_TOKEN",
+        "cookie_env": "PP_LINKED_BOB_COOKIE",
         "attributes": {
           "document_id": "bob"
         }
@@ -74,6 +74,7 @@
         "source_resource": "private-documents",
         "origin": "https://objects.example.invalid",
         "path": "/objects/{id}.pdf",
+        "authentication": "anonymous",
         "denial_statuses": [
           403,
           404

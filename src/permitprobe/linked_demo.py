@@ -1,4 +1,4 @@
-"""Synthetic linked API/storage fixtures with credential-free direct reads."""
+"""Synthetic linked API/storage fixtures for anonymous and same-origin reads."""
 
 import json
 import os
@@ -12,16 +12,25 @@ from permitprobe.report import Report
 
 TOKENS = {
     "PP_LINKED_ALICE_TOKEN": "synthetic-linked-alice",
-    "PP_LINKED_BOB_TOKEN": "synthetic-linked-bob",
+    "PP_LINKED_BOB_COOKIE": "session=synthetic-linked-bob",
 }
 PRIVATE_BODY = "synthetic-linked-private-body-never-report"
 REDIRECT_SENTINEL = "synthetic-linked-redirect-never-follow"
-SCENARIOS = ("safe", "public-leak", "source-missing", "redirect", "server-error")
+SCENARIOS = (
+    "safe",
+    "public-leak",
+    "source-missing",
+    "redirect",
+    "server-error",
+    "authenticated-safe",
+    "authenticated-leak",
+)
 
 
 def linked_policy(
     base_url: str = "https://api.example.invalid",
     storage_origin: str = "https://objects.example.invalid",
+    authentication: str = "anonymous",
 ) -> dict:
     denial = {
         "type": "object",
@@ -44,7 +53,7 @@ def linked_policy(
                 {
                     "name": "bob",
                     "role": "member",
-                    "token_env": "PP_LINKED_BOB_TOKEN",
+                    "cookie_env": "PP_LINKED_BOB_COOKIE",
                     "attributes": {"document_id": "bob"},
                 },
             ],
@@ -73,8 +82,13 @@ def linked_policy(
                 {
                     "name": "direct-private-documents",
                     "source_resource": "private-documents",
-                    "origin": storage_origin,
-                    "path": "/objects/{id}.pdf",
+                    "origin": base_url if authentication == "source_subjects" else storage_origin,
+                    "path": (
+                        "/alternate/{id}.pdf"
+                        if authentication == "source_subjects"
+                        else "/objects/{id}.pdf"
+                    ),
+                    "authentication": authentication,
                     "denial_statuses": [403, 404],
                 }
             ],
@@ -101,7 +115,11 @@ def linked_servers(scenario: str = "safe"):
     class ScenarioRequests(list):
         active_scenario = scenario
 
-    api_requests = []
+    class APIRequests(list):
+        pass
+
+    api_requests = APIRequests()
+    api_requests.linked_requests = []
     storage_requests = ScenarioRequests()
 
     class APIHandler(BaseHTTPRequestHandler):
@@ -110,11 +128,35 @@ def linked_servers(scenario: str = "safe"):
 
         def do_GET(self):
             token = self.headers.get("Authorization", "").removeprefix("Bearer ")
-            subject = {
-                TOKENS["PP_LINKED_ALICE_TOKEN"]: "alice",
-                TOKENS["PP_LINKED_BOB_TOKEN"]: "bob",
-            }.get(token)
+            subject = "alice" if token == TOKENS["PP_LINKED_ALICE_TOKEN"] else None
+            if self.headers.get("Cookie") == TOKENS["PP_LINKED_BOB_COOKIE"]:
+                subject = "bob"
             owner = self.path.rsplit("/", 1)[-1]
+            if self.path.startswith("/alternate/"):
+                owner = owner.removesuffix(".pdf")
+                api_requests.linked_requests.append((subject, self.path, dict(self.headers)))
+                active = storage_requests.active_scenario
+                allowed = active == "authenticated-public-leak" or (
+                    subject is not None
+                    and (
+                        active == "authenticated-leak"
+                        or (subject == owner and active != "authenticated-deny-all")
+                    )
+                )
+                status = 200 if allowed else 403
+                raw = PRIVATE_BODY.encode() if allowed else b"denied"
+                self.send_response(status)
+                self.send_header("Content-Type", "application/octet-stream")
+                self.send_header(
+                    "Content-Length",
+                    str(len(raw) + (100 if allowed else 0)),
+                )
+                self.end_headers()
+                try:
+                    self.wfile.write(raw)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
+                return
             api_requests.append((subject, self.path, dict(self.headers)))
             allowed = subject is not None and subject == owner
             if (
@@ -198,5 +240,11 @@ def linked_servers(scenario: str = "safe"):
 def run_linked_demo(scenario: str) -> Report:
     report = Report()
     with linked_servers(scenario) as (api, storage, _, _), linked_environment():
-        check_api(Policy.model_validate(linked_policy(api, storage)).api, report)
+        authentication = (
+            "source_subjects" if scenario.startswith("authenticated-") else "anonymous"
+        )
+        check_api(
+            Policy.model_validate(linked_policy(api, storage, authentication)).api,
+            report,
+        )
     return report

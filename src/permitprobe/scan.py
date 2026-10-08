@@ -57,6 +57,13 @@ def run_scan(
         if report.discovery is not None
         else {"planned": 0, "attempted": 0, "completed": 0, "failed": 0}
     )
+    linked_same_origin_credentials_used = any(
+        case_id in report.evidence
+        and item.get("case_type") == "linked_read"
+        and item.get("authentication") == "source_subjects"
+        and item.get("role") != "anonymous"
+        for case_id, item in report.planned_cases.items()
+    )
     report.scan = {
         "schema_version": 2,
         "mode": "declared_get_one_shot",
@@ -122,7 +129,9 @@ def run_scan(
             "discovered_requests_executed": 0,
             "redirects_followed": False,
             "linked_read_contracts": len(policy.api.linked_resources),
-            "linked_credentials_forwarded": False,
+            "linked_credentials_forwarded": linked_same_origin_credentials_used,
+            "linked_same_origin_credentials_used": linked_same_origin_credentials_used,
+            "linked_cross_origin_credentials_forwarded": False,
             "linked_response_bodies_consumed": False,
         },
     }

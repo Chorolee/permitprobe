@@ -289,12 +289,13 @@ class Resource(Strict):
 
 
 class LinkedResource(Strict):
-    """Anonymous direct-read check tied to a protected source object."""
+    """Status-only alternate read tied to a protected source object."""
 
     name: str = Field(pattern=NAME)
     source_resource: str = Field(pattern=NAME)
     origin: str = Field(max_length=512)
     path: str = Field(min_length=1, max_length=512)
+    authentication: Literal["anonymous", "source_subjects"] = "anonymous"
     denial_statuses: list[Literal[401, 403, 404, 410]] = Field(
         default_factory=lambda: [401, 403, 404],
         min_length=1,
@@ -441,9 +442,13 @@ class API(Strict):
                 or source.kind != "object"
                 or any(rule.role == "anonymous" for rule in source.allow)
                 or path_params(linked.path) != [source.owner_param]
+                or (
+                    linked.authentication == "source_subjects"
+                    and origin_key(linked.origin) != origin_key(self.base_url)
+                )
             ):
                 raise ValueError(
-                    "linked resources need one matching placeholder from a protected source object"
+                    "linked resources need a protected source, matching placeholder, and same-origin credentials"
                 )
         return self
 
@@ -475,6 +480,9 @@ def api_contract_digest(
     if include_linked and contract.get("linked_resources"):
         for item, linked in zip(contract["linked_resources"], config.linked_resources):
             item["origin"] = list(origin_key(linked.origin))
+            if linked.authentication == "anonymous":
+                # Preserve digests from the first anonymous linked-read contract.
+                item.pop("authentication", None)
     else:
         # Preserve existing/scoped digests when linked reads are absent or not executed.
         contract.pop("linked_resources", None)
