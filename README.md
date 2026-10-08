@@ -774,6 +774,9 @@ total deadline.
 
 ## Scope and limitations
 
+The [threat model](docs/threat-model.md) records the protected assets, trusted inputs, DNS/TLS and
+local-process assumptions, artifact boundary, and fail-closed guarantees in one reviewable place.
+
 - Only declared GET cases and explicitly configured anonymous discovery sources are requested.
   This is not a full application security audit.
 - A forbidden `2xx` response is an access-policy violation; content markers can strengthen
