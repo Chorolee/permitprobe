@@ -4,12 +4,20 @@ import hashlib
 import ipaddress
 import json
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
+
+from permitprobe.validation import (
+    MAX_JSON_NUMBER_DIGITS,
+    MAX_JSON_NUMBER_EXPONENT,
+    bounded_json_decimal,
+    bounded_json_int,
+)
 
 NAME = r"^[A-Za-z][A-Za-z0-9_-]{0,63}$"
 ENV = r"^[A-Z][A-Z0-9_]{0,127}$"
@@ -648,7 +656,7 @@ def api_contract_digest(
     include_public: bool = True,
     include_linked: bool = True,
 ) -> str:
-    contract = config.model_dump(mode="json")
+    contract = config.model_dump(mode="python")
     # Bind evidence to the exact normalized origin without retaining the URL in
     # reports. Moving a baseline or retest to another environment must change
     # the digest and therefore fail closed.
@@ -683,9 +691,7 @@ def api_contract_digest(
     # existed. Once configured, the complete discovery contract is digest-bound.
     if contract.get("discovery") is None:
         contract.pop("discovery", None)
-    return hashlib.sha256(
-        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
+    return hashlib.sha256(_canonical_json(contract).encode()).hexdigest()
 
 
 class Handoff(Strict):
@@ -729,6 +735,42 @@ def _unique(pairs):
     return result
 
 
+def _canonical_json(value) -> str:
+    """Serialize JSON-native policy data without rounding Decimal values."""
+
+    if value is None:
+        return "null"
+    if type(value) is bool:
+        return "true" if value else "false"
+    if type(value) is int:
+        return json.dumps(value, allow_nan=False)
+    if type(value) is float:
+        return json.dumps(value, allow_nan=False)
+    if isinstance(value, Decimal):
+        parts = value.as_tuple()
+        if (
+            not value.is_finite()
+            or len(parts.digits) > MAX_JSON_NUMBER_DIGITS
+            or abs(value.adjusted()) > MAX_JSON_NUMBER_EXPONENT
+            or abs(parts.exponent) > MAX_JSON_NUMBER_EXPONENT
+        ):
+            raise ValueError("policy number is too large")
+        return str(value)
+    if isinstance(value, str):
+        value.encode("utf-8")
+        return json.dumps(value)
+    if isinstance(value, list):
+        return "[" + ",".join(_canonical_json(item) for item in value) + "]"
+    if isinstance(value, dict):
+        if any(not isinstance(key, str) for key in value):
+            raise TypeError("JSON object keys must be strings")
+        return "{" + ",".join(
+            _canonical_json(key) + ":" + _canonical_json(value[key])
+            for key in sorted(value)
+        ) + "}"
+    raise TypeError("unsupported policy JSON value")
+
+
 def load_policy(path: Path) -> Policy:
     try:
         with path.open("rb") as f:
@@ -738,8 +780,11 @@ def load_policy(path: Path) -> Policy:
         data = json.loads(
             raw,
             object_pairs_hook=_unique,
+            parse_float=bounded_json_decimal,
+            parse_int=bounded_json_int,
             parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
         )
+        _canonical_json(data)
         if not isinstance(data, dict) or type(data.get("version")) is not int:
             raise PolicyError("policy version must be the integer 1")
         return Policy.model_validate(data)

@@ -29,19 +29,20 @@ def _unique_pairs(pairs):
     return result
 
 
-def _bounded_int(raw: str) -> int:
+def bounded_json_int(raw: str) -> int:
     if len(raw.removeprefix("-")) > MAX_JSON_NUMBER_DIGITS:
         raise ValueError("JSON integer is too large")
     return int(raw)
 
 
-def _bounded_decimal(raw: str) -> Decimal:
+def bounded_json_decimal(raw: str) -> Decimal:
     try:
         value = Decimal(raw)
         if (
             not value.is_finite()
             or len(value.as_tuple().digits) > MAX_JSON_NUMBER_DIGITS
             or abs(value.adjusted()) > MAX_JSON_NUMBER_EXPONENT
+            or abs(value.as_tuple().exponent) > MAX_JSON_NUMBER_EXPONENT
         ):
             raise ValueError("JSON decimal is too large")
         return value
@@ -55,8 +56,8 @@ def exact_json_loads(text: str):
     return json.loads(
         text,
         object_pairs_hook=_unique_pairs,
-        parse_float=_bounded_decimal,
-        parse_int=_bounded_int,
+        parse_float=bounded_json_decimal,
+        parse_int=bounded_json_int,
         parse_constant=lambda _: (_ for _ in ()).throw(ValueError()),
     )
 

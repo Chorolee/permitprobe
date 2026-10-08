@@ -28,6 +28,8 @@ while it is in the `0.x` development series.
 
 - API response validation now preserves exact decimal numbers so large or high-precision values
   cannot pass a different numeric schema constraint after binary floating-point rounding.
+- Policy JSON now preserves exact decimal schema values and rejects invalid Unicode or excessive
+  numeric complexity before either can alter a contract digest or runtime verdict.
 - Handoff scans now hash-pin the official Gitleaks executable itself and run a private verified
   copy, so a forged version string or scanner path replacement cannot execute untrusted bytes.
 - Live bearer tokens and cookies are now kept outside the third-party planning and classification

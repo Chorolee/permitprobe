@@ -6,6 +6,7 @@ import stat
 import subprocess
 import sys
 import zipfile
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -22,8 +23,9 @@ from permitprobe.demo import (
     run_demo,
 )
 from permitprobe.handoff import RECEIPT_NAME, check_handoff, collect, write_bundle
-from permitprobe.policy import Handoff, Policy, PolicyError, load_policy
+from permitprobe.policy import Handoff, Policy, PolicyError, api_contract_digest, load_policy
 from permitprobe.report import Report
+from permitprobe.validation import exact_json_loads, exact_validator
 
 
 @pytest.fixture
@@ -267,6 +269,43 @@ def test_json_policy_is_strict(text, tmp_path):
     path.write_text(text)
     with pytest.raises(PolicyError):
         load_policy(path)
+
+
+def _numeric_policy(tmp_path, number: str, name: str):
+    data = example_policy()
+    schema = data["api"]["resources"][0]["response_schema"]
+    schema["required"].append("sequence")
+    schema["properties"]["sequence"] = {"const": "EXACT-NUMBER"}
+    path = tmp_path / name
+    path.write_text(json.dumps(data).replace('"EXACT-NUMBER"', number))
+    return load_policy(path)
+
+
+def test_policy_schema_numbers_keep_exact_json_precision(tmp_path):
+    first = _numeric_policy(tmp_path, "9007199254740993.0", "first.json")
+    second = _numeric_policy(tmp_path, "9007199254740992.0", "second.json")
+    first_schema = first.api.resources[0].response_schema
+    second_schema = second.api.resources[0].response_schema
+    assert first_schema["properties"]["sequence"]["const"] == Decimal(
+        "9007199254740993.0"
+    )
+    assert api_contract_digest(first.api) != api_contract_digest(second.api)
+    response = exact_json_loads(
+        '{"id":"alice","title":"Synthetic","sequence":9007199254740993.0}'
+    )
+    assert not list(exact_validator(first_schema).iter_errors(response))
+    assert list(exact_validator(second_schema).iter_errors(response))
+
+
+def test_policy_rejects_invalid_unicode_and_extreme_decimal_exponents(tmp_path):
+    invalid_unicode = tmp_path / "invalid-unicode.json"
+    invalid_unicode.write_text(
+        '{"version":1,"handoff":{"root":".","files":["bad\\ud800.txt"],"allow":["*"]}}'
+    )
+    with pytest.raises(PolicyError):
+        load_policy(invalid_unicode)
+    with pytest.raises(PolicyError):
+        _numeric_policy(tmp_path, "0e999999", "extreme.json")
 
 
 def handoff(files=None, **kwargs):
