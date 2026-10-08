@@ -623,7 +623,8 @@ contract findings also add a header-free same-route control when available. It r
 and an explicit safe revision/deployment label such as `--change-ref deploy:abc123`; absence on
 one run alone is not called a fix. A prior report is rejected unless its checks reproduce its
 grouped findings exactly, so swapping a finding's evidence IDs cannot redirect the retest to
-benign cases. Prior reports remain unchanged and every retest carries its own lineage graph.
+benign cases. Duplicate JSON keys, non-finite numbers and invalid Unicode are rejected before any
+request. Prior reports remain unchanged and every retest carries its own lineage graph.
 
 ## Known-finding baselines
 
