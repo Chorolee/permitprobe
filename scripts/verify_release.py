@@ -358,8 +358,14 @@ def verify_release(release: dict, directory: Path, requested_tag: str) -> dict[s
     version = requested_tag[1:]
     names = {f"permitprobe-{version}-py3-none-any.whl", f"permitprobe-{version}.tar.gz"}
     assets = release.get("assets", [])
-    records = {a["name"]: a for a in assets if a.get("name") in names}
-    if len([a for a in assets if a.get("name") in names]) != 2 or set(records) != names:
+    if (
+        not isinstance(assets, list)
+        or len(assets) != 2
+        or any(not isinstance(asset, dict) for asset in assets)
+    ):
+        raise ValueError("The release must contain exactly the two expected distribution assets.")
+    records = {asset.get("name"): asset for asset in assets}
+    if len(records) != 2 or set(records) != names:
         raise ValueError("The release must contain exactly the two expected distribution assets.")
     if {p.name for p in directory.iterdir()} != names:
         raise ValueError("The upload directory must contain exactly the expected wheel and sdist.")
