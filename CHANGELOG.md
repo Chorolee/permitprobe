@@ -36,6 +36,8 @@ while it is in the `0.x` development series.
   retaining the role-name arrays permitted by OpenAPI 3.1 and 3.2.
 - Release provenance now rejects author names and author or maintainer email fields that are absent
   from the reviewed project metadata, preventing identity data from being added only to artifacts.
+- Registry verification now rejects a GitHub Release containing any asset beyond the exact expected
+  wheel and source distribution, so unverified downloads cannot share a verified release page.
 - CI now scans the clean checked-out source with hash-verified Gitleaks and fixed default rules
   before tests or builds, ignoring repository suppression files and inline allow comments.
 - API response validation now preserves exact decimal numbers so large or high-precision values
