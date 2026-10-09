@@ -58,6 +58,6 @@ jobs:
       - name: Install and smoke-test the built wheel
         run: >-
           python scripts/smoke_wheel.py
-          --wheel dist/permitprobe-0.3.1-py3-none-any.whl
+          --wheel dist/permitprobe-0.3.2-py3-none-any.whl
           --requirements requirements.lock
           --gitleaks .tools/gitleaks
