@@ -42,6 +42,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Keep the project and import-package versions identical. Release candidates must pass a fresh
   wheel install, dependency-consistency check, strict metadata checks and the packaged safe demo
   before tagging.
+- Run release-smoke Python subprocesses in isolated interpreter mode so an inherited `PYTHONPATH`,
+  user site, or other `PYTHON*` setting cannot replace the installed wheel under test.
 - Install development and release dependencies from the complete SHA256-locked requirements file,
   install PermitProbe itself without dependency resolution, and build without an isolated resolver.
 - Keep optional future integrations clearly distinguished from implemented capabilities.
