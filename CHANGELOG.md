@@ -38,6 +38,8 @@ while it is in the `0.x` development series.
   from the reviewed project metadata, preventing identity data from being added only to artifacts.
 - Registry verification now rejects a GitHub Release containing any asset beyond the exact expected
   wheel and source distribution, so unverified downloads cannot share a verified release page.
+- Baseline, prior-report, checkpoint, exploration-trace, and replay version fields now require JSON
+  integers, preventing booleans or numerically equal decimals from bypassing format dispatch.
 - CI now scans the clean checked-out source with hash-verified Gitleaks and fixed default rules
   before tests or builds, ignoring repository suppression files and inline allow comments.
 - API response validation now preserves exact decimal numbers so large or high-precision values

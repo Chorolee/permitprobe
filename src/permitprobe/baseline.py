@@ -159,7 +159,8 @@ class Baseline:
             digest = data.get("policy_digest")
             entries = data.get("entries")
             if (
-                data.get("format_version") != FORMAT_VERSION
+                type(data.get("format_version")) is not int
+                or data["format_version"] != FORMAT_VERSION
                 or not isinstance(data.get("permitprobe_version"), str)
                 or not isinstance(digest, str)
                 or not re.fullmatch(r"[0-9a-f]{64}", digest)
@@ -194,7 +195,8 @@ def build_baseline(
         or coverage["planned"] != coverage["observed"]
         or coverage["observed"] != len(report_data["evidence"])
         or coverage["unprobed"]
-        or report_data.get("exit_code") not in (0, 1)
+        or type(report_data.get("exit_code")) is not int
+        or report_data["exit_code"] not in (0, 1)
         or any(check["outcome"] == "inconclusive" for check in report_data["checks"])
     ):
         raise PolicyError("inconclusive reports cannot be baselined")

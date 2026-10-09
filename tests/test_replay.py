@@ -193,6 +193,12 @@ def test_manifest_file_is_private_strict_and_tamper_evident(tmp_path):
     with pytest.raises(PolicyError, match="duplicate JSON keys"):
         ReplayManifest.load(path)
 
+    payload = manifest.to_dict()
+    payload["format_version"] = True
+    path.write_text(json.dumps(payload))
+    with pytest.raises(PolicyError, match="valid replay manifest"):
+        ReplayManifest.load(path)
+
 
 def test_checkpoint_and_report_sources_produce_the_same_manifest(tmp_path):
     with read_server("selective-owner-leak") as (url, _), read_environment():
@@ -215,6 +221,23 @@ def test_checkpoint_and_report_sources_produce_the_same_manifest(tmp_path):
     state_path.write_text(json.dumps(broken))
     with pytest.raises(PolicyError, match="internally inconsistent"):
         load_replay_source(state_path)
+
+
+@pytest.mark.parametrize("field", ["report_schema", "checkpoint_schema", "protocol"])
+def test_replay_source_rejects_non_integer_document_versions(tmp_path, field):
+    with read_server("selective-owner-leak") as (url, _), read_environment():
+        report = exploration_report(url)
+    source = checkpoint(report) if field == "checkpoint_schema" else report
+    if field == "report_schema":
+        source["schema_version"] = 2.0
+    elif field == "checkpoint_schema":
+        source["schema_version"] = True
+    else:
+        source["exploration"]["protocol_version"] = 1.0
+    path = tmp_path / "invalid-source.json"
+    path.write_text(json.dumps(source))
+    with pytest.raises(PolicyError, match="compatible|unsupported shape|trace"):
+        build_replay_manifest(load_replay_source(path))
 
 
 def test_replay_cli_creates_and_executes_manifest(tmp_path, capsys):

@@ -70,7 +70,12 @@ def load_replay_source(path: Path) -> dict:
     """Load either an exploration report or its private checkpoint wrapper."""
 
     data = _read_json(path, MAX_SOURCE_BYTES)
-    if isinstance(data, dict) and data.get("schema_version") == 1 and "report" in data:
+    if (
+        isinstance(data, dict)
+        and type(data.get("schema_version")) is int
+        and data["schema_version"] == 1
+        and "report" in data
+    ):
         if set(data) != {"schema_version", "status", "policy_digest", "exploration", "report"}:
             raise PolicyError("exploration checkpoint has an unsupported shape")
         status = data.get("status")
@@ -106,7 +111,8 @@ def _scheduled_case_ids(report: dict) -> tuple[list[str], list[str]]:
     rounds = trace.get("rounds")
     tail = trace.get("deterministic_tail")
     if (
-        trace.get("protocol_version") != 1
+        type(trace.get("protocol_version")) is not int
+        or trace["protocol_version"] != 1
         or not _valid_case_ids(baseline)
         or not isinstance(rounds, list)
         or len(rounds) > 20
@@ -186,7 +192,8 @@ class ReplayManifest:
         baseline = data["baseline_case_ids"]
         cases = data["case_ids"]
         if (
-            data["format_version"] != FORMAT_VERSION
+            type(data["format_version"]) is not int
+            or data["format_version"] != FORMAT_VERSION
             or not isinstance(data["permitprobe_version"], str)
             or not VERSION.fullmatch(data["permitprobe_version"])
             or not isinstance(data["policy_digest"], str)
