@@ -221,6 +221,12 @@ def test_operation_parameter_overrides_path_parameter(tmp_path):
             bearerAuth={"type": "apiKey", "name": "X-Key", "in": "body"}
         ),
         lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "apiKey", "name": "X-Key", "in": []}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
+            bearerAuth={"type": "apiKey", "name": "X-Key", "in": {}}
+        ),
+        lambda document: document["components"]["securitySchemes"].update(
             bearerAuth={"type": "oauth2", "flows": {}}
         ),
         lambda document: document["components"]["securitySchemes"].update(
@@ -433,6 +439,32 @@ def test_inventory_cli_writes_exclusive_report(tmp_path, capsys):
     ]
     assert main(text_args) == 0
     assert "OpenAPI GET coverage: 2/2; non-GET not executed: 1" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("location", [[], {}])
+def test_inventory_cli_normalizes_non_string_api_key_locations(
+    location, tmp_path, capsys
+):
+    document = openapi_document()
+    document["components"]["securitySchemes"]["bearerAuth"] = {
+        "type": "apiKey",
+        "name": "X-Key",
+        "in": location,
+    }
+    policy_path, openapi_path = write_inputs(tmp_path, document=document)
+    assert main(
+        [
+            "inventory-openapi",
+            str(policy_path),
+            "--openapi",
+            str(openapi_path),
+            "--format",
+            "json",
+        ]
+    ) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "inconclusive"
+    assert payload["checks"][0]["code"] == "configuration"
 
 
 def test_public_only_inventory_is_supported(tmp_path):

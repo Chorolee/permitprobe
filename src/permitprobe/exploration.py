@@ -260,7 +260,7 @@ class ExternalProvider:
         payload = json.dumps(request, ensure_ascii=False, separators=(",", ":")).encode()
         if len(payload) > MAX_PROVIDER_BYTES or timeout_seconds <= 0:
             raise ProviderError("provider request exceeds budget")
-        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "LANG": "C.UTF-8"}
+        env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
         for name in self.pass_env:
             if name in os.environ:
                 env[name] = os.environ[name]

@@ -56,6 +56,22 @@ def test_public_no_store_contract(cache, expected):
     assert no_store_matches(httpx.Headers({"Cache-Control": cache})) is expected
 
 
+@pytest.mark.parametrize("whitespace", [b"\xa0", b"\x85"])
+def test_cache_contracts_reject_non_http_whitespace(whitespace):
+    assert not no_store_matches(
+        httpx.Headers([(b"Cache-Control", b"no-store" + whitespace)])
+    )
+    assert not private_cache_matches(
+        httpx.Headers(
+            [
+                (b"Cache-Control", b"private"),
+                (b"Vary", b"Cookie" + whitespace),
+            ]
+        ),
+        "Cookie",
+    )
+
+
 @pytest.mark.parametrize(
     "location,expected",
     [

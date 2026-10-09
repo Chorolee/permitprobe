@@ -8,6 +8,41 @@ import httpx
 from permitprobe.policy import Redirect, origin_key
 
 
+def _http_values(headers: httpx.Headers, name: str) -> list[str] | None:
+    values = headers.get_list(name)
+    if any(
+        char != "\t" and not 0x20 <= ord(char) <= 0x7E
+        for value in values
+        for char in value
+    ):
+        return None
+    return values
+
+
+def _cache_directives(headers: httpx.Headers) -> dict[str, str | None] | None:
+    values = _http_values(headers, "cache-control")
+    if not values:
+        return None
+    directives: dict[str, str | None] = {}
+    for raw_value in values:
+        for raw_part in raw_value.lower().split(","):
+            part = raw_part.strip(" \t")
+            name, separator, value = part.partition("=")
+            if not name or name in directives:
+                return None
+            argument = value if separator else None
+            if name == "max-age":
+                if argument is None or not re.fullmatch(r"[0-9]+", argument):
+                    return None
+            elif (
+                name not in {"private", "no-store", "no-cache", "must-revalidate", "no-transform"}
+                or argument is not None
+            ):
+                return None
+            directives[name] = argument
+    return directives
+
+
 def redirect_matches(
     rule: Redirect, headers: httpx.Headers, owner_param: str, owner_id: str
 ) -> bool:
@@ -44,25 +79,15 @@ def redirect_matches(
 
 def private_cache_matches(headers: httpx.Headers, auth_header: str) -> bool:
     # Intentionally a small unambiguous subset, not a complete HTTP cache parser.
-    directives = {}
-    for part in headers.get("cache-control", "").lower().split(","):
-        parts = part.strip().split("=", 1)
-        name = parts[0]
-        if name in directives:
-            return False
-        value = parts[1] if len(parts) == 2 else None
-        if name == "max-age":
-            if value is None or not re.fullmatch(r"[0-9]+", value):
-                return False
-        elif (
-            name not in {"private", "no-store", "no-cache", "must-revalidate", "no-transform"}
-            or value is not None
-        ):
-            return False
-        directives[name] = value
+    directives = _cache_directives(headers)
+    if directives is None:
+        return False
     if "no-store" in directives:
         return True
-    vary = [s.strip().lower() for s in headers.get("vary", "").split(",")]
+    vary_values = _http_values(headers, "vary")
+    if vary_values is None:
+        return False
+    vary = [part.strip(" \t").lower() for value in vary_values for part in value.split(",")]
     if "*" in vary and len(vary) != 1:
         return False
     if any(not re.fullmatch(r"[!#$%&'*+.^_`|~0-9a-z-]+", s) for s in vary):
@@ -72,8 +97,5 @@ def private_cache_matches(headers: httpx.Headers, auth_header: str) -> bool:
 
 def no_store_matches(headers: httpx.Headers) -> bool:
     # Reuse the same strict directive subset while requiring no-store itself.
-    names = {
-        part.strip().split("=", 1)[0]
-        for part in headers.get("cache-control", "").lower().split(",")
-    }
-    return "no-store" in names and private_cache_matches(headers, "")
+    directives = _cache_directives(headers)
+    return directives is not None and "no-store" in directives

@@ -13,11 +13,24 @@ import permitprobe.api as api_module
 import permitprobe.public_contracts as public_module
 from permitprobe.api import check_api
 from permitprobe.cli import main
-from permitprobe.policy import CORSContract, Policy, ResponseCookieContract, api_contract_digest
+from permitprobe.policy import (
+    CORSContract,
+    HSTSContract,
+    Policy,
+    ResponseCookieContract,
+    SecurityHeadersContract,
+    api_contract_digest,
+)
 from permitprobe.report import Report
 from permitprobe.retest import run_retest
 from permitprobe.scan import run_scan
-from permitprobe.web_security import cookie_results, cors_origin_key, cors_results
+from permitprobe.web_security import (
+    _hsts_matches,
+    cookie_results,
+    cors_origin_key,
+    cors_results,
+    security_header_results,
+)
 
 ATTACKER_COOKIE = "session=synthetic-attacker-shape"
 TRUSTED_ORIGIN = "https://trusted.example.invalid"
@@ -367,6 +380,66 @@ def test_hsts_accepts_rfc_delta_seconds_without_fixed_width_integer_conversion(
     assert report.exit_code == 0, report.to_dict()
 
 
+@pytest.mark.parametrize(
+    "value",
+    [
+        "max-age=31536000; includeSubDomains=true",
+        'max-age=31536000; junk="unterminated',
+        "max-age=31536000; junk=hello world",
+        "max-age=31536000; junk=abc,def",
+        "max-age=31536000; preload=enabled",
+    ],
+)
+def test_hsts_rejects_malformed_or_valued_directives(value):
+    assert not _hsts_matches(value, HSTSContract(min_max_age=31_536_000))
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "max-age=31536000; extension=token",
+        'max-age=31536000; extension="quoted value"',
+    ],
+)
+def test_hsts_accepts_well_formed_extension_directives(value):
+    assert _hsts_matches(value, HSTSContract(min_max_age=31_536_000))
+
+
+@pytest.mark.parametrize(
+    "header,value,contract",
+    [
+        (
+            b"Content-Security-Policy",
+            b"default-src 'none'\xa0",
+            {"content_security_policy": {"required_directives": {"default-src": ["'none'"]}}},
+        ),
+        (
+            b"Cross-Origin-Opener-Policy",
+            b"same-origin\x85",
+            {"cross_origin_opener_policy": ["same-origin"]},
+        ),
+        (
+            b"Cross-Origin-Embedder-Policy",
+            b"require-corp\xa0",
+            {"cross_origin_embedder_policy": ["require-corp"]},
+        ),
+        (
+            b"Cross-Origin-Resource-Policy",
+            b"same-origin\xa0",
+            {"cross_origin_resource_policy": ["same-origin"]},
+        ),
+        (b"Origin-Agent-Cluster", b"?1\xa0", {"origin_agent_cluster": True}),
+    ],
+)
+def test_security_headers_reject_non_http_whitespace(header, value, contract):
+    [(code, outcome, _)] = security_header_results(
+        SecurityHeadersContract.model_validate(contract),
+        httpx.Headers([(header, value)]),
+    )
+    assert code.startswith("web.")
+    assert outcome == "fail"
+
+
 def test_declared_response_security_contract_passes_without_retaining_values(monkeypatch):
     _security_environment(monkeypatch)
     with public_server("web-safe") as (url, requests):
@@ -559,6 +632,66 @@ def test_partitioned_cookie_must_be_valueless_and_secure(value, expected):
     )
     assert code == "web.cookies"
     assert outcome == expected
+
+
+@pytest.mark.parametrize("whitespace", [b"\xa0", b"\x85"])
+def test_response_cookie_rejects_non_http_whitespace(whitespace):
+    contract = ResponseCookieContract(name="session", secure=True, http_only=True)
+    [(code, outcome, _)] = cookie_results(
+        [contract],
+        httpx.Headers([(b"Set-Cookie", b"session=synthetic; Secure; HttpOnly" + whitespace)]),
+    )
+    assert code == "web.cookies"
+    assert outcome == "fail"
+
+
+@pytest.mark.parametrize(
+    "name,attributes",
+    [
+        ("__secure-session", {}),
+        ("__HOST-session", {"secure": True, "host_only": False, "path": "/"}),
+        ("__http-session", {"secure": True, "http_only": False}),
+        (
+            "__HOST-Http-session",
+            {"secure": True, "http_only": False, "host_only": True, "path": "/"},
+        ),
+    ],
+)
+def test_cookie_prefix_invariants_are_ascii_case_insensitive(name, attributes):
+    with pytest.raises(ValidationError):
+        ResponseCookieContract(name=name, **attributes)
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        [
+            (b"Access-Control-Allow-Origin", TRUSTED_ORIGIN.encode() + b"\xa0"),
+            (b"Access-Control-Allow-Credentials", b"true"),
+            (b"Vary", b"Origin"),
+        ],
+        [
+            (b"Access-Control-Allow-Origin", TRUSTED_ORIGIN.encode()),
+            (b"Access-Control-Allow-Credentials", b"true\x85"),
+            (b"Vary", b"Origin"),
+        ],
+        [
+            (b"Access-Control-Allow-Origin", TRUSTED_ORIGIN.encode()),
+            (b"Access-Control-Allow-Credentials", b"true"),
+            (b"Vary", b"Origin\xa0"),
+        ],
+    ],
+)
+def test_cors_rejects_non_http_whitespace(headers):
+    contract = CORSContract(allow_variants=["trusted"], allow_credentials=True)
+    [(code, outcome, _)] = cors_results(
+        contract,
+        "trusted",
+        {"Origin": TRUSTED_ORIGIN},
+        httpx.Headers(headers),
+    )
+    assert code == "web.cors"
+    assert outcome == "fail"
 
 
 @pytest.mark.parametrize(

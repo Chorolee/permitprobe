@@ -429,17 +429,18 @@ class ResponseCookieContract(Strict):
             raise ValueError("cookie path must be a safe absolute path")
         if "none" in self.same_site and self.secure is not True:
             raise ValueError("SameSite=None requires an explicit Secure contract")
-        if self.name.startswith("__Host-") and (
+        lowered_name = self.name.lower()
+        if lowered_name.startswith("__host-") and (
             self.secure is not True or self.host_only is not True or self.path != "/"
         ):
             raise ValueError("__Host- cookies require Secure, host-only, and Path=/")
-        if self.name.startswith("__Secure-") and self.secure is not True:
+        if lowered_name.startswith("__secure-") and self.secure is not True:
             raise ValueError("__Secure- cookies require Secure")
-        if self.name.startswith("__Http-") and (
+        if lowered_name.startswith("__http-") and (
             self.secure is not True or self.http_only is not True
         ):
             raise ValueError("__Http- cookies require Secure and HttpOnly")
-        if self.name.startswith("__Host-Http-") and self.http_only is not True:
+        if lowered_name.startswith("__host-http-") and self.http_only is not True:
             raise ValueError("__Host-Http- cookies also require HttpOnly")
         return self
 

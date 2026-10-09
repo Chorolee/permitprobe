@@ -46,9 +46,11 @@ particular host or whether a declared GET handler is free of side effects.
 An exploration provider is a capability-selection boundary, not an operating-system sandbox.
 PermitProbe does not send it URLs, credentials, headers, response bodies, redirect destinations,
 query values, or files, and it cannot make PermitProbe execute an invented request. The executable
-runs under the caller's account, however, and retains any filesystem or network access that the OS
-already grants that account. Use a separately sandboxed adapter when the provider itself is not
-trusted.
+runs with a fixed platform-default `PATH`, a fixed locale, and only explicitly allowed additional
+environment variables; policy-referenced credential and request-header variables cannot be
+allowed. It still runs under the caller's account and retains any filesystem or network access that
+the OS already grants that account. Use a separately sandboxed adapter when the provider itself is
+not trusted.
 
 ## Network execution boundary
 
@@ -60,8 +62,9 @@ validated policy and selected case; provider output, OpenAPI content, and discov
 not become request components.
 
 OpenAPI security requirements are validated against their declared version before they can mark a
-route protected. OAuth scopes must exist in the inline scheme, and non-OAuth requirement arrays
-follow the different OpenAPI 3.0 and 3.1+ rules.
+route protected. Security-scheme fields require their exact structural types, OAuth scopes must
+exist in the inline scheme, and non-OAuth requirement arrays follow the different OpenAPI 3.0 and
+3.1+ rules. Malformed types fail as invalid documents rather than escaping the result boundary.
 
 Hostnames use ordinary platform DNS resolution. PermitProbe does not pin an IP address or require
 successive resolutions to return the same address. HTTPS still validates the configured hostname,
@@ -72,9 +75,12 @@ that every backend address behaved identically.
 Response bodies are streamed under a byte cap and are consumed only in memory. Transport timeouts
 bound network work, and a separate cumulative validation deadline bounds local JSON parsing,
 schema evaluation, ownership checks, and browser-response checks. Exact JSON numbers are retained
-during validation. Reports store normalized findings and evidence IDs rather than response bodies,
-raw headers, URLs, query values, or observed object values. Operator-configured resource, subject,
-variant, and file labels are retained for diagnosis; those names must not contain secrets.
+during validation. Browser-security and cache fields accept only ASCII visible bytes plus HTAB and
+trim only HTTP SP/HTAB optional whitespace. HSTS validates all directive syntax and valueless flags,
+and cookie security prefixes retain their invariants under ASCII case-insensitive matching. Reports
+store normalized findings and evidence IDs rather than response bodies, raw headers, URLs, query
+values, or observed object values. Operator-configured resource, subject, variant, and file labels
+are retained for diagnosis; those names must not contain secrets.
 
 Linked reads can forward a source identity only when the linked origin exactly matches the primary
 origin and the policy explicitly selects `source_subjects`. Cross-origin linked reads are
@@ -99,9 +105,11 @@ Local JSON inputs must resolve to bounded regular files, and document-version fi
 JSON integer types before format dispatch. Handoff roots and member paths are
 canonical relative paths; directory and file components are opened without following symlinks.
 Private directories, credentials, keys, hard links, binary content, device names, cross-platform
-case or Unicode aliases, and configured size overruns are rejected. Gitleaks is copied to a private
-temporary location and its complete platform-specific digest is verified before it scans staged
-bytes. The archive is then built from those checked bytes rather than by rereading source paths.
+case or Unicode aliases, normalized file/directory ancestor collisions, and configured size
+overruns are rejected. The embedded manifest is included in the same collision check. Gitleaks is
+copied to a private temporary location and its complete platform-specific digest is verified before
+it scans staged bytes. The archive is then built from those checked bytes rather than by rereading
+source paths.
 
 Starter directories and files, reports, and other immutable artifacts are created with owner-only
 permissions; immutable artifacts always use a new path.

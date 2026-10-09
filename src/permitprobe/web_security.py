@@ -34,6 +34,9 @@ _SF_TOKEN = re.compile(_SF_WORD)
 _SF_NUMBER = re.compile(r"-?(?:[0-9]{1,12}\.[0-9]{1,3}|[0-9]{1,15})")
 _SF_BINARY = re.compile(r":[A-Za-z0-9+/]*={0,2}:")
 _HTTP_FIELD_NAME = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+_HTTP_QUOTED_STRING = re.compile(
+    r'"(?:[\t\x20\x21\x23-\x5b\x5d-\x7e]|\\[\t\x20-\x7e])*"'
+)
 _MAX_PERMISSIONS_POLICY_BYTES = 8_192
 _MAX_PERMISSIONS_POLICY_MEMBERS = 128
 _MAX_PERMISSIONS_POLICY_ITEMS = 64
@@ -46,9 +49,15 @@ def _values(headers: httpx.Headers, name: str) -> list[str]:
     return headers.get_list(name)
 
 
+def _trim_ows(value: str) -> str | None:
+    if any(char != "\t" and not 0x20 <= ord(char) <= 0x7E for char in value):
+        return None
+    return value.strip(" \t")
+
+
 def _one(headers: httpx.Headers, name: str) -> str | None:
     values = _values(headers, name)
-    return values[0].strip() if len(values) == 1 else None
+    return _trim_ows(values[0]) if len(values) == 1 else None
 
 
 def _result(code: str, passed: bool, noun: str) -> tuple[str, str, str]:
@@ -66,14 +75,28 @@ def _hsts_matches(value: str | None, contract: HSTSContract) -> bool:
         return False
     directives: dict[str, str | None] = {}
     for raw in value.split(";"):
-        part = raw.strip()
+        part = raw.strip(" \t")
         if not part:
             continue
         name, separator, argument = part.partition("=")
-        lowered = name.strip().lower()
-        if not re.fullmatch(r"[a-z][a-z-]*", lowered) or lowered in directives:
+        lowered = name.strip(" \t").lower()
+        if _HTTP_FIELD_NAME.fullmatch(lowered) is None or lowered in directives:
             return False
-        directives[lowered] = argument.strip() if separator else None
+        if separator:
+            argument = argument.strip(" \t")
+            if not argument or (
+                _HTTP_FIELD_NAME.fullmatch(argument) is None
+                and _HTTP_QUOTED_STRING.fullmatch(argument) is None
+            ):
+                return False
+            directives[lowered] = argument
+        else:
+            directives[lowered] = None
+    if any(
+        name in directives and directives[name] is not None
+        for name in ("includesubdomains", "preload")
+    ):
+        return False
     maximum = directives.get("max-age")
     if maximum is None:
         return False
@@ -99,7 +122,8 @@ def _csp_matches(value: str | None, required: dict[str, list[str]]) -> bool:
         return False
     directives: dict[str, list[str]] = {}
     for raw in value.split(";"):
-        tokens = raw.strip().split()
+        part = raw.strip(" \t")
+        tokens = re.split(r"[ \t]+", part) if part else []
         if not tokens:
             continue
         name = tokens[0].lower()
@@ -358,8 +382,11 @@ def _cookie_jar(
     result: dict[str, list[dict[str, str | None]]] = {}
     valid = True
     for raw in _values(headers, "Set-Cookie"):
+        if _trim_ows(raw) is None:
+            valid = False
+            continue
         parts = raw.split(";")
-        name, separator, value = parts[0].strip().partition("=")
+        name, separator, value = parts[0].strip(" \t").partition("=")
         if (
             not separator
             or not COOKIE_NAME.fullmatch(name)
@@ -369,13 +396,13 @@ def _cookie_jar(
             continue
         attributes: dict[str, str | None] = {}
         for raw_attribute in parts[1:]:
-            attribute = raw_attribute.strip()
+            attribute = raw_attribute.strip(" \t")
             attr_name, has_value, attr_value = attribute.partition("=")
-            lowered = attr_name.strip().lower()
-            argument = attr_value.strip() if has_value else None
+            lowered = attr_name.strip(" \t").lower()
+            argument = attr_value.strip(" \t") if has_value else None
             if (
                 not attribute
-                or not COOKIE_NAME.fullmatch(attr_name.strip())
+                or not COOKIE_NAME.fullmatch(attr_name.strip(" \t"))
                 or lowered in attributes
                 or (
                     argument is not None
@@ -499,7 +526,10 @@ def _header_value(headers: dict[str, str], name: str) -> str | None:
 
 def _vary_has_origin(headers: httpx.Headers) -> bool:
     values = _values(headers, "Vary")
-    if sum(len(value) for value in values) > _MAX_VARY_BYTES:
+    if (
+        sum(len(value) for value in values) > _MAX_VARY_BYTES
+        or any(_trim_ows(value) is None for value in values)
+    ):
         return False
     members = 0
     empty_members = 0
@@ -534,9 +564,12 @@ def cors_results(
     credentials = _values(response_headers, "Access-Control-Allow-Credentials")
     if request_key is None or len(values) > 1 or len(credentials) > 1:
         return [_result("web.cors", False, "CORS")]
-    allowed_origin = values[0].strip() if values else None
+    allowed_origin = _trim_ows(values[0]) if values else None
+    credentials_value = _trim_ows(credentials[0]) if credentials else None
+    if (values and allowed_origin is None) or (credentials and credentials_value is None):
+        return [_result("web.cors", False, "CORS")]
     # Fetch compares the serialized Origin and credentials literal byte-for-byte.
-    credentials_true = bool(credentials) and credentials[0].strip() == "true"
+    credentials_true = bool(credentials) and credentials_value == "true"
     wildcard = allowed_origin == "*"
     reflected = (
         allowed_origin is not None and not wildcard and allowed_origin == request_origin

@@ -552,6 +552,43 @@ def test_nonportable_archive_paths_are_rejected(names, tmp_path):
     assert not output.exists()
 
 
+@pytest.mark.parametrize(
+    "names",
+    [
+        (f"{RECEIPT_NAME}/note.txt",),
+        ("Folder", "folder/child.txt"),
+        ("folder/child.txt", "Folder"),
+    ],
+)
+def test_file_and_directory_archive_path_collisions_are_rejected(names, tmp_path):
+    report = Report()
+    root = tmp_path / "root"
+    root.mkdir()
+    if len(names) == 1:
+        (root / RECEIPT_NAME).mkdir()
+        (root / RECEIPT_NAME / "note.txt").write_text("Synthetic review.\n")
+    else:
+        (root / "Folder").write_text("Synthetic review.\n")
+        (root / "folder").mkdir()
+        (root / "folder" / "child.txt").write_text("Synthetic child review.\n")
+    snapshot = collect(handoff(list(names), root="root"), tmp_path, report)
+    assert len(snapshot) < len(names)
+    assert report.exit_code == 1
+    output = tmp_path / "ambiguous.zip"
+    with pytest.raises(ValueError, match="canonical and portable"):
+        write_bundle({name: b"synthetic" for name in names}, output)
+    assert not output.exists()
+
+
+def test_sibling_archive_paths_remain_portable(tmp_path):
+    write_bundle(
+        {"folder/one.txt": b"one", "folder/two.txt": b"two"},
+        tmp_path / "siblings.zip",
+    )
+    with zipfile.ZipFile(tmp_path / "siblings.zip") as archive:
+        assert {"folder/one.txt", "folder/two.txt"} <= set(archive.namelist())
+
+
 def test_overlong_windows_archive_component_is_rejected(tmp_path):
     name = "x" * 256
     report = Report()

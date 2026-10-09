@@ -232,9 +232,9 @@ runtime authorization implementation is correct. Live boundary checks remain res
 those conclusions.
 
 Input is a bounded local JSON file. Local parameter `$ref` values are resolved with a depth
-limit, while referenced security schemes must be inline supported scheme objects with valid
-required fields, including declared OAuth scopes, version-appropriate non-OAuth requirement values,
-and HTTPS flow endpoints. External references,
+limit, while referenced security schemes must be inline supported scheme objects with valid field
+types and required fields, including declared OAuth scopes, version-appropriate non-OAuth
+requirement values, and HTTPS flow endpoints. External references,
 referenced path items, URLs, YAML, callbacks, webhooks and generated requests are outside this
 command's scope. Spec examples, response schemas and authentication
 values are not copied into the report. The report binds the result to the PermitProbe policy
@@ -288,7 +288,7 @@ Reports retain the measured milliseconds but omit URLs, query values, header val
 response bodies. A public finding can be passed to `permitprobe retest`; the retest adds a
 header-free variant for the same resource when one is declared.
 
-### Browser-facing response security (unreleased)
+### Browser-facing response security
 
 `response_security` extends an existing public GET contract without adding requests beyond its
 declared variants. It can require HSTS age/directives, `nosniff`, accepted Referrer-Policy and
@@ -321,12 +321,14 @@ isolation policies, and origin-keyed agent clustering:
 }
 ```
 
-Header checks require one unambiguous field value. Missing, duplicated, malformed or weaker values
-fail the declared contract. Each configured CSP directive must have exactly the declared token set;
+Header checks require one unambiguous ASCII field value and recognize only SP and HTAB as HTTP
+optional whitespace. Missing, duplicated, malformed, Unicode-whitespace or weaker values fail the
+declared contract. Each configured CSP directive must have exactly the declared token set;
 undeclared directives are not graded. The check does not execute a browser. HSTS has browser effect
 only over HTTPS, even though the synthetic loopback fixtures can exercise its parser over HTTP.
 HSTS `max-age` accepts the RFC decimal or quoted-decimal form and compares arbitrarily long values
-without a fixed-width integer conversion.
+without a fixed-width integer conversion. Every HSTS extension must still use valid HTTP token or
+quoted-string syntax, and `includeSubDomains` and `preload` are accepted only as valueless flags.
 Each required `Permissions-Policy` feature must be present exactly once with an empty allowlist
 (`feature=()`). PermitProbe parses the complete bounded structured dictionary, including supported
 origin allowlists and an optional token-valued `report-to` parameter, so malformed or duplicate
@@ -340,8 +342,8 @@ the corresponding contract.
 Declared response cookies are matched by exact cookie name. Each contract can require `Secure`,
 `HttpOnly`, accepted `SameSite` values, host-only scope and an exact Path. Duplicate matching
 cookies fail. `Partitioned` is accepted only as a valueless attribute alongside `Secure`.
-`__Host-`, `__Secure-`, `__Http-` and `__Host-Http-` declarations must include their browser
-prefix requirements:
+`__Host-`, `__Secure-`, `__Http-` and `__Host-Http-` declarations, including ASCII case variants,
+must include their browser prefix requirements:
 
 ```json
 {
@@ -566,7 +568,9 @@ hypotheses and chooses the next **pre-authorized case IDs**. PermitProbe retains
 credentials, HTTP delivery, expected policy, classification, budgets, coverage and completion.
 The provider cannot create a URL, header, token, request body, shell command or tool call.
 Variables explicitly forwarded with `--provider-env` may supply model authentication, but a
-variable referenced by policy for a subject credential or public request header is rejected.
+variable referenced by policy for a subject credential or public request header is rejected. The
+provider otherwise receives a fixed platform-default `PATH` and fixed locale rather than inheriting
+the caller's environment.
 
 Providers use a JSON-over-stdio protocol, so Astra, Claude, Gemini, local models, agent
 frameworks and deterministic programs can all use the same contract. The core contains no
@@ -705,7 +709,8 @@ uploaded or sent to an agent. Send the checked archive, not a re-read of the ori
 The built-in boundary refuses dotenv files, private-key files, credential directories,
 Git/private-memory directories, symlinks, hard links, non-regular files, binary content,
 path traversal, cross-platform case or Unicode path collisions, Windows-reserved characters,
-device names and overlong path components, and configured size overruns.
+file/directory ancestor collisions, device names and overlong path components, and configured size
+overruns. A path below the embedded manifest name is also rejected.
 User deny patterns win over allow patterns;
 neither can override the built-in exclusions. Glob patterns match the whole POSIX path,
 and `*` can cross directory separators. Include specific files rather than a broad `*`.

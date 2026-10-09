@@ -1,5 +1,6 @@
 import copy
 import json
+import os
 import time
 from pathlib import Path
 
@@ -441,10 +442,11 @@ def test_external_provider_is_model_neutral_and_receives_only_explicit_environme
         "assert request['protocol_version'] == 1\n"
         "print(json.dumps({'protocol_version': 1, 'candidates': [], "
         "'done_hint': True, 'rationale': str(bool(os.getenv('PP_ALICE_COOKIE'))) + ':' + "
-        "os.getenv('MODEL_TOKEN', '')}))\n"
+        "os.getenv('MODEL_TOKEN', '') + ':' + os.getenv('PATH', '')}))\n"
     )
     monkeypatch.setenv("PP_ALICE_COOKIE", "must-not-reach-provider")
     monkeypatch.setenv("MODEL_TOKEN", "explicit")
+    monkeypatch.setenv("PATH", "synthetic-target-secret")
     provider = ExternalProvider(
         "any-model",
         [str(Path("/usr/bin/python3")), str(adapter)],
@@ -454,7 +456,7 @@ def test_external_provider_is_model_neutral_and_receives_only_explicit_environme
         {"protocol_version": 1, "candidate_schema": {}}, timeout_seconds=5
     )
     assert reply.done_hint is True
-    assert reply.rationale == "False:explicit"
+    assert reply.rationale == f"False:explicit:{os.defpath}"
 
 
 @pytest.mark.parametrize("request_value", ["credential", "public-header"])
