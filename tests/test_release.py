@@ -441,9 +441,13 @@ def test_wheel_smoke_ignores_parent_pythonpath(tmp_path, monkeypatch, built_dist
         ("Author", "Synthetic Person"),
         ("Author-email", "synthetic@example.invalid"),
         ("Maintainer-email", "synthetic@example.invalid"),
+        ("Home-page", "https://unreviewed.example.invalid"),
+        ("Classifier", "Private :: Do Not Upload"),
+        ("Project-URL", "Repository, https://github.com/Chorolee/permitprobe"),
+        ("Requires-Dist", "httpx<1,>=0.28"),
     ],
 )
-def test_distribution_rejects_undeclared_identity_metadata(
+def test_distribution_rejects_undeclared_or_duplicate_metadata(
     tmp_path, built_distributions, field, value
 ):
     original_wheel, original_source, root = built_distributions
@@ -466,7 +470,7 @@ def test_distribution_rejects_undeclared_identity_metadata(
                 entries[index] = (copy.copy(member), inject(content))
 
     _mutate_source(original_source, source, mutate_source)
-    with pytest.raises(ValueError, match="identity metadata"):
+    with pytest.raises(ValueError):
         module.verify_executable_sources(wheel, source, root, VERSION)
 
 
