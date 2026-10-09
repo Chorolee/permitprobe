@@ -5,6 +5,21 @@ while it is in the `0.x` development series.
 
 ## [Unreleased]
 
+### Security
+
+- Exploration providers now receive a fixed platform-default `PATH` instead of inheriting the
+  caller's value, preventing a policy credential named `PATH` from crossing the provider boundary.
+- Browser-security and cache contracts now reject non-ASCII response field bytes and treat only
+  SP and HTAB as HTTP optional whitespace, closing Unicode-whitespace normalization bypasses.
+- HSTS parsing now validates every directive value and rejects values on the
+  `includeSubDomains` and `preload` flags, including malformed undeclared extensions.
+- Cookie security-prefix invariants now use ASCII case-insensitive matching, preventing case
+  variants of `__Host-`, `__Secure-`, `__Http-`, and `__Host-Http-` from dropping requirements.
+- Malformed non-string OpenAPI API-key locations now become ordinary invalid-document results
+  instead of escaping validation through an unhashable-value exception.
+- Checked bundles now reject normalized file/directory ancestor collisions, including paths below
+  the embedded manifest name, before creating an archive that cannot be extracted portably.
+
 ## [0.3.1] - 2026-10-09
 
 ### Added

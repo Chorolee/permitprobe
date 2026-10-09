@@ -64,6 +64,22 @@ def _portable_path_key(name: str) -> str:
     return unicodedata.normalize("NFC", name).casefold()
 
 
+def _portable_path_parts(name: str) -> tuple[str, ...]:
+    return tuple(_portable_path_key(part) for part in PurePosixPath(name).parts)
+
+
+def _portable_path_conflicts(paths: set[tuple[str, ...]], name: str) -> bool:
+    candidate = _portable_path_parts(name)
+    if any(
+        candidate[: len(existing)] == existing
+        or existing[: len(candidate)] == candidate
+        for existing in paths
+    ):
+        return True
+    paths.add(candidate)
+    return False
+
+
 def _windows_device_path(parts: tuple[str, ...]) -> bool:
     return any(
         _portable_path_key(part).split(".", 1)[0].rstrip(" .") in WINDOWS_DEVICE_NAMES
@@ -179,7 +195,7 @@ def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, byte
         report.add("handoff.root", "inconclusive", "handoff", "Cannot open handoff directory.")
         return snapshot
     try:
-        portable_names = {_portable_path_key(RECEIPT_NAME)}
+        portable_names = {_portable_path_parts(RECEIPT_NAME)}
         for name in policy.files:
             if not _canonical_handoff_path(name):
                 report.add(
@@ -189,8 +205,7 @@ def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, byte
                     "Non-canonical or non-portable relative file path.",
                 )
                 continue
-            portable = _portable_path_key(name)
-            if portable in portable_names:
+            if _portable_path_conflicts(portable_names, name):
                 report.add(
                     "handoff.path",
                     "fail",
@@ -198,7 +213,6 @@ def collect(policy: Handoff, policy_dir: Path, report: Report) -> dict[str, byte
                     "Non-canonical or non-portable relative file path.",
                 )
                 continue
-            portable_names.add(portable)
             path = PurePosixPath(name)
             if _denied(name, policy):
                 report.add(
@@ -406,14 +420,12 @@ def check_handoff(
 
 
 def write_bundle(snapshot: dict[str, bytes], destination: Path) -> None:
-    portable_names = {_portable_path_key(RECEIPT_NAME)}
+    portable_names = {_portable_path_parts(RECEIPT_NAME)}
     for name in snapshot:
         if not _canonical_handoff_path(name):
             raise ValueError("bundle paths must be canonical and portable")
-        portable = _portable_path_key(name)
-        if portable in portable_names:
+        if _portable_path_conflicts(portable_names, name):
             raise ValueError("bundle paths must be canonical and portable")
-        portable_names.add(portable)
     manifest = {
         "schema_version": 1,
         "scope": "Exact text bytes checked by PermitProbe; not an authorization to send.",

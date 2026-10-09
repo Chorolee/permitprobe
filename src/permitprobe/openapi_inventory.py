@@ -193,11 +193,13 @@ def _security_scheme(document: dict, value) -> bool:
         return False
     if kind == "apiKey":
         name = value.get("name")
+        location = value.get("in")
         return (
             isinstance(name, str)
             and 1 <= len(name) <= 128
             and all(32 <= ord(char) <= 126 for char in name)
-            and value.get("in") in {"query", "header", "cookie"}
+            and isinstance(location, str)
+            and location in {"query", "header", "cookie"}
         )
     if kind == "http":
         scheme = value.get("scheme")

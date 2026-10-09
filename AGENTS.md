@@ -21,6 +21,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   across subjects; reordering or quoting must not bypass the distinct-credential preflight.
 - Never forward a policy-referenced subject credential or request-header environment variable to
   an exploration provider, even when it is also named explicitly with `--provider-env`.
+- Give an exploration provider only the fixed platform default `PATH`, a fixed locale, and
+  explicitly allowed variables; never inherit the caller's `PATH` implicitly.
 - All fixtures are synthetic. Tests use loopback; never point tests at production.
 - Run `python -m pytest -q` and `ruff check src tests scripts` for behavior changes.
   Gitleaks 8.30.1 must be installed; missing-engine tests may not be silently skipped.
@@ -28,7 +30,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Resolve handoff roots relative to the real policy file, require canonical relative components,
   and open every directory component without following links or bypassing private directories.
 - Bundle member paths must remain unique after Unicode normalization and case folding, including
-  the receipt name, so extraction cannot alias two separately checked entries.
+  the receipt name, and no file path may be an ancestor of another member, so extraction cannot
+  alias a file with a directory or two separately checked entries.
 - Reject reserved device names in every bundle path component, including extension-bearing and
   superscript-digit Windows aliases; checked bytes must always extract as ordinary files.
 - Reject characters that Win32 reserves in every file or directory name before a checked bundle
@@ -50,7 +53,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - OpenAPI inventory is offline and local-file-only. Discovered operations never grant
   execution authority; only explicit PermitProbe resources may produce GET requests.
 - Validate every referenced OpenAPI security scheme's inline type and required structural fields;
-  never classify an empty, referenced or unsupported scheme as protected coverage.
+  malformed field types must become policy errors, and an empty, referenced or unsupported scheme
+  must never become protected coverage or an uncaught exception.
 - Known-finding baselines must keep failure checks visible, match exact code/target pairs,
   bind to the normalized target origin, and never turn incomplete evidence, discovery gaps,
   handoff failures or latency failures into a clean run.
@@ -101,11 +105,15 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   header, Origin, or cookie values in reports. Classify every declared Origin variant, preserve the
   GET-only boundary, and fail duplicate, malformed, reflected, or under-protected responses closed.
 - Enforce browser cookie acceptance prerequisites in addition to declared attributes: Partitioned
-  is valueless and requires Secure, while every supported security prefix keeps its full invariant.
+  is valueless and requires Secure, while every supported security prefix keeps its full invariant
+  under ASCII case-insensitive prefix matching.
+- Accept only ASCII visible bytes plus HTAB in response security and cache header fields, and trim
+  only HTTP SP/HTAB optional whitespace; Unicode whitespace must never normalize into a pass.
 - Parse COOP and COEP as single structured-field items, keep CORP case-sensitive, and require the
   exact true structured boolean for origin agent clustering.
 - Validate HSTS delta-seconds without converting attacker-controlled digit strings to integers;
-  accept only unquoted or simply quoted ASCII decimal values.
+  accept only unquoted or simply quoted ASCII decimal values, validate every extension directive
+  as an HTTP token or quoted string, and require known flag directives to remain valueless.
 - Parse the complete bounded Permissions-Policy structured dictionary and require an exact empty
   allowlist for every feature declared disabled; never retain observed policy values.
 - Publish local reports, baselines, replay/retest records, matrices, state and checked bundles with
