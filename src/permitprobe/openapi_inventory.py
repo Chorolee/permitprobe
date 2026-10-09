@@ -227,9 +227,14 @@ def _security_scheme(document: dict, value) -> bool:
     return _https_url(url)
 
 
-def _declares_oauth_scopes(scheme: dict, required: list[str]) -> bool:
-    if scheme["type"] != "oauth2":
+def _security_requirement_matches(document: dict, scheme: dict, required: list[str]) -> bool:
+    kind = scheme["type"]
+    if kind == "openIdConnect":
         return True
+    if kind != "oauth2":
+        # OpenAPI 3.0 requires an empty array for non-OAuth schemes. OpenAPI
+        # 3.1 and 3.2 additionally permit out-of-band role names here.
+        return not required or not document["openapi"].startswith("3.0.")
     declared = {
         scope
         for flow in scheme["flows"].values()
@@ -271,7 +276,7 @@ def _access(document: dict, operation: dict) -> str:
         if not isinstance(schemes, dict) or any(
             name not in schemes
             or not _security_scheme(document, schemes[name])
-            or not _declares_oauth_scopes(schemes[name], scopes)
+            or not _security_requirement_matches(document, schemes[name], scopes)
             for name, scopes in requirement.items()
         ):
             raise PolicyError("OpenAPI security requirement references an unknown scheme")

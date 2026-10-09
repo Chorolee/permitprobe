@@ -410,6 +410,41 @@ def test_distribution_is_bound_to_every_checked_out_release_file(built_distribut
     module.verify_executable_sources(wheel, source, root, VERSION)
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("Author", "Synthetic Person"),
+        ("Author-email", "synthetic@example.invalid"),
+        ("Maintainer-email", "synthetic@example.invalid"),
+    ],
+)
+def test_distribution_rejects_undeclared_identity_metadata(
+    tmp_path, built_distributions, field, value
+):
+    original_wheel, original_source, root = built_distributions
+    wheel = tmp_path / original_wheel.name
+    source = tmp_path / original_source.name
+    metadata_name = f"permitprobe-{VERSION}.dist-info/METADATA"
+
+    def inject(raw):
+        return raw.replace(b"\n\n", f"\n{field}: {value}\n\n".encode(), 1)
+
+    _mutate_wheel(
+        original_wheel,
+        wheel,
+        lambda files: files.__setitem__(metadata_name, inject(files[metadata_name])),
+    )
+
+    def mutate_source(entries):
+        for index, (member, content) in enumerate(entries):
+            if member.name.endswith("/PKG-INFO"):
+                entries[index] = (copy.copy(member), inject(content))
+
+    _mutate_source(original_source, source, mutate_source)
+    with pytest.raises(ValueError, match="identity metadata"):
+        module.verify_executable_sources(wheel, source, root, VERSION)
+
+
 @pytest.mark.parametrize("artifact", ["wheel", "source", "tag", "extra"])
 def test_distribution_source_drift_is_rejected(tmp_path, built_distributions, artifact):
     original_wheel, original_source, root = built_distributions

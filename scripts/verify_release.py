@@ -152,6 +152,11 @@ def _validate_metadata(raw: bytes, source_root: Path, project: dict, version: st
     }
     if any(metadata.get_all(name) != [value] for name, value in expected.items()):
         raise ValueError("Distribution metadata differs from the release tag.")
+    if any(
+        metadata.get_all(name)
+        for name in ("Author", "Author-email", "Maintainer-email")
+    ):
+        raise ValueError("Distribution contains undeclared identity metadata.")
     if set(metadata.get_all("Project-URL", [])) != {
         f"{name}, {url}" for name, url in project.get("urls", {}).items()
     }:

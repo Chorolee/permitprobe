@@ -233,7 +233,8 @@ those conclusions.
 
 Input is a bounded local JSON file. Local parameter `$ref` values are resolved with a depth
 limit, while referenced security schemes must be inline supported scheme objects with valid
-required fields, including declared OAuth scopes and HTTPS flow endpoints. External references,
+required fields, including declared OAuth scopes, version-appropriate non-OAuth requirement values,
+and HTTPS flow endpoints. External references,
 referenced path items, URLs, YAML, callbacks, webhooks and generated requests are outside this
 command's scope. Spec examples, response schemas and authentication
 values are not copied into the report. The report binds the result to the PermitProbe policy
@@ -834,7 +835,8 @@ pin their Ubuntu release instead of following a moving `ubuntu-latest` label.
 
 Registry publication resolves the requested release tag inside that trusted full-history `main`
 checkout. Its exact commit must be an ancestor of `main` before PermitProbe materializes the release
-source, compares wheel and sdist bytes, or makes a distribution available to the publish job.
+source, compares wheel and sdist bytes and identity metadata, or makes a distribution available to
+the publish job. Artifact-only author names and author or maintainer email fields are rejected.
 
 ## What expanding verification means
 

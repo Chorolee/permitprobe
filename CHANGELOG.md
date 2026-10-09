@@ -34,6 +34,10 @@ while it is in the `0.x` development series.
 
 - OpenAPI inventory now validates referenced security-scheme objects, required OAuth scopes and
   HTTPS flow endpoints, rejecting incomplete schemes before reporting protected-route coverage.
+- OpenAPI 3.0 inventory now rejects nonempty requirement arrays for API-key and HTTP schemes while
+  retaining the role-name arrays permitted by OpenAPI 3.1 and 3.2.
+- Release provenance now rejects author names and author or maintainer email fields that are absent
+  from the reviewed project metadata, preventing identity data from being added only to artifacts.
 - CI now scans the clean checked-out source with hash-verified Gitleaks and fixed default rules
   before tests or builds, ignoring repository suppression files and inline allow comments.
 - API response validation now preserves exact decimal numbers so large or high-precision values
