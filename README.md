@@ -9,7 +9,7 @@ Security Maintainer: [@Chorolee](https://github.com/Chorolee)<br>
 Security maintenance: vulnerability triage, security releases, and coordinated disclosure.
 
 License: Apache-2.0<br>
-Current release: [v0.3.0](https://github.com/Chorolee/permitprobe/releases/tag/v0.3.0)
+Current release: [v0.3.1](https://github.com/Chorolee/permitprobe/releases/tag/v0.3.1)
 
 PermitProbe helps service operators validate:
 
@@ -33,11 +33,11 @@ It reuses [Overstep](https://github.com/kabiri-labs/overstep) for authorization 
 classification, [JSON Schema](https://github.com/python-jsonschema/jsonschema) for response
 contracts, and [Gitleaks](https://github.com/gitleaks/gitleaks) for secret detection.
 
-Version **0.3.0** supports GET-only JSON REST APIs, one-shot declared website assessments and
+Version **0.3.1** supports GET-only JSON REST APIs, one-shot declared website assessments and
 explicit UTF-8 text-file handoffs on Linux/macOS. It includes the public-route, inventory,
 baseline, exploration, replay, retest, linked-read and proposal-discovery capabilities documented
 below. See the [changelog](CHANGELOG.md) and
-[v0.3.0 release notes](docs/releases/v0.3.0.md). A passing result
+[v0.3.1 release notes](docs/releases/v0.3.1.md). A passing result
 applies only to the declared cases and scanned bytes.
 
 ## Try the working demo
@@ -45,7 +45,7 @@ applies only to the declared cases and scanned bytes.
 Install the Python package from [PyPI](https://pypi.org/project/permitprobe/) (Python 3.11+):
 
 ```sh
-python -m pip install 'permitprobe==0.3.0'
+python -m pip install 'permitprobe==0.3.1'
 permitprobe --version
 ```
 

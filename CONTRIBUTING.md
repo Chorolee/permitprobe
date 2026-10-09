@@ -38,7 +38,7 @@ PERMITPROBE_GITLEAKS=.tools/gitleaks python -m pytest -q
 python -m build --no-isolation
 python -m twine check --strict dist/*
 python scripts/smoke_wheel.py \
-  --wheel dist/permitprobe-0.3.0-py3-none-any.whl \
+  --wheel dist/permitprobe-0.3.1-py3-none-any.whl \
   --requirements requirements.lock \
   --gitleaks .tools/gitleaks
 ```
@@ -55,7 +55,7 @@ Do not rebuild between GitHub publication and registry publication.
 
 ## Publishing a verified GitHub release to PyPI
 
-PermitProbe v0.3.0 is [published on PyPI](https://pypi.org/project/permitprobe/0.3.0/).
+PermitProbe v0.3.1 is [published on PyPI](https://pypi.org/project/permitprobe/0.3.1/).
 The maintainer's GitHub Trusted Publisher is configured; subsequent releases can
 use the same workflow without creating another pending publisher.
 

@@ -5,6 +5,8 @@ while it is in the `0.x` development series.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-09
+
 ### Added
 
 - A maintained threat model records credentials, DNS/TLS, provider process authority, local
@@ -224,6 +226,8 @@ while it is in the `0.x` development series.
 
 - Initial authorization, response-schema and selected handoff boundary checks.
 
+[Unreleased]: https://github.com/Chorolee/permitprobe/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Chorolee/permitprobe/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Chorolee/permitprobe/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/Chorolee/permitprobe/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/Chorolee/permitprobe/compare/v0.1.1...v0.2.0
