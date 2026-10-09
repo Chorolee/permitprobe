@@ -296,6 +296,12 @@ def test_malformed_prior_report_is_rejected_as_policy_error(tmp_path):
     with pytest.raises(PolicyError, match="compatible prior"):
         load_prior_report(malformed)
 
+    report, _ = prior_selective_finding()
+    report["schema_version"] = 2.0
+    malformed.write_text(json.dumps(report))
+    with pytest.raises(PolicyError, match="compatible"):
+        load_prior_report(malformed)
+
 
 def test_prior_report_loader_rejects_ambiguous_nonstandard_json(tmp_path):
     prior, _ = prior_selective_finding()

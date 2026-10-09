@@ -205,6 +205,9 @@ def test_baseline_loader_rejects_tampering_duplicates_and_bad_dates(tmp_path):
     unknown_top = copy.deepcopy(valid)
     unknown_top["unexpected"] = True
     cases.append(unknown_top)
+    wrong_version_type = copy.deepcopy(valid)
+    wrong_version_type["format_version"] = True
+    cases.append(wrong_version_type)
 
     for index, data in enumerate(cases):
         path = tmp_path / f"invalid-{index}.json"
@@ -216,6 +219,13 @@ def test_baseline_loader_rejects_tampering_duplicates_and_bad_dates(tmp_path):
     duplicate_keys.write_text('{"format_version":1,"format_version":1}')
     with pytest.raises(PolicyError, match="compatible"):
         Baseline.load(duplicate_keys)
+
+
+def test_baseline_creation_rejects_boolean_exit_code():
+    report = report_with(("api.BOLA", "fail", "documents/alice/other/bob")).to_dict()
+    report["exit_code"] = True
+    with pytest.raises(PolicyError, match="inconclusive"):
+        build_baseline(report, today=TODAY)
 
 
 def test_cli_creates_and_applies_baseline_without_hiding_report(tmp_path, capsys):

@@ -95,7 +95,8 @@ Replay revalidates sanitized IDs against the current policy and does not invoke 
 
 ## Local files and artifact boundary
 
-Local JSON inputs must resolve to bounded regular files. Handoff roots and member paths are
+Local JSON inputs must resolve to bounded regular files, and document-version fields require exact
+JSON integer types before format dispatch. Handoff roots and member paths are
 canonical relative paths; directory and file components are opened without following symlinks.
 Private directories, credentials, keys, hard links, binary content, device names, cross-platform
 case or Unicode aliases, and configured size overruns are rejected. Gitleaks is copied to a private

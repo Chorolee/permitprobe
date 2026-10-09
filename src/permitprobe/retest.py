@@ -63,7 +63,8 @@ def _validate_prior_report(data) -> dict:
     if (
         len(canonical) > MAX_PRIOR_REPORT_BYTES
         or not isinstance(data, dict)
-        or data.get("schema_version") != 2
+        or type(data.get("schema_version")) is not int
+        or data["schema_version"] != 2
         or not isinstance(data.get("policy_digest"), str)
         or not re.fullmatch(r"[0-9a-f]{64}", data["policy_digest"])
         or not isinstance(data.get("findings"), list)
