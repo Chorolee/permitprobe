@@ -112,6 +112,9 @@ def test_release_verification_bounds_wheel_member_count(monkeypatch, release_pai
         lambda r: r.update(tag_name="v0.1.0"),
         lambda r: r["assets"].pop(),
         lambda r: r["assets"].append(copy.deepcopy(r["assets"][0])),
+        lambda r: r["assets"].append(
+            {"name": "unverified-installer.exe", "digest": "sha256:" + "0" * 64}
+        ),
         lambda r: r["assets"][0].update(digest="sha256:" + "0" * 64),
         lambda r: r["assets"][0].pop("digest"),
     ],

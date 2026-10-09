@@ -120,9 +120,10 @@ every scan verifies the executable again before use. CI scans the clean source c
 generating artifacts, using fixed built-in scanner rules without repository suppression files or
 inline allow comments. Release verification runs from the trusted main checkout, requires the
 requested tag to be an ancestor of main, downloads registry artifacts, verifies their digests,
-bounds decompressed sdist bytes and archive member counts, and compares their executable package
-bytes with that exact commit. Distribution validation also rejects author and maintainer identity
-fields that are absent from the reviewed project metadata.
+requires the release to contain only the expected wheel and source distribution, bounds decompressed
+sdist bytes and archive member counts, and compares their executable package bytes with that exact
+commit. Distribution validation also rejects author and maintainer identity fields that are absent
+from the reviewed project metadata.
 
 These measures make reviewed bytes traceable; they do not sandbox the Python interpreter, an
 installed dependency, the operating system, or a deliberately selected local executable.

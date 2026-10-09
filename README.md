@@ -836,7 +836,8 @@ pin their Ubuntu release instead of following a moving `ubuntu-latest` label.
 Registry publication resolves the requested release tag inside that trusted full-history `main`
 checkout. Its exact commit must be an ancestor of `main` before PermitProbe materializes the release
 source, compares wheel and sdist bytes and identity metadata, or makes a distribution available to
-the publish job. Artifact-only author names and author or maintainer email fields are rejected.
+the publish job. The GitHub Release may contain only those two verified distributions; additional
+assets are rejected. Artifact-only author names and author or maintainer email fields are rejected.
 
 ## What expanding verification means
 
