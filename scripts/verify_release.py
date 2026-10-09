@@ -76,6 +76,7 @@ def _local_release_files(source_root: Path) -> dict[str, bytes]:
         "NOTICE",
         "README.md",
         "SECURITY.md",
+        "setup.cfg",
         "permitprobe.schema.json",
         "pyproject.toml",
         "requirements.lock",
@@ -258,7 +259,6 @@ def verify_executable_sources(
     egg_info = "src/permitprobe.egg-info"
     generated_source = {
         "PKG-INFO",
-        "setup.cfg",
         f"{egg_info}/PKG-INFO",
         f"{egg_info}/SOURCES.txt",
         f"{egg_info}/dependency_links.txt",
@@ -285,6 +285,13 @@ def verify_executable_sources(
             relative = relative.rstrip("/")
             relative_names.append(relative)
             if not (member.isfile() or member.isdir()):
+                invalid_member = True
+            elif (
+                member.uid != 0
+                or member.gid != 0
+                or member.uname != "root"
+                or member.gname != "root"
+            ):
                 invalid_member = True
             elif member.isfile():
                 files[relative] = member
@@ -318,7 +325,7 @@ def verify_executable_sources(
                 raise ValueError("Source archive file differs from the release tag.")
         if read("PKG-INFO") != metadata or read(f"{egg_info}/PKG-INFO") != metadata:
             raise ValueError("Source and wheel metadata differ.")
-        if read("setup.cfg") != b"[egg_info]\ntag_build = \ntag_date = 0\n\n":
+        if read("setup.cfg") != local["setup.cfg"]:
             raise ValueError("Source archive setup configuration is unexpected.")
         if read(f"{egg_info}/dependency_links.txt") != b"\n":
             raise ValueError("Source archive dependency links are unexpected.")
