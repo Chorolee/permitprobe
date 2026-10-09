@@ -37,12 +37,17 @@ def smoke(wheel: Path, requirements: Path, gitleaks: Path) -> dict[str, str]:
     with tempfile.TemporaryDirectory(prefix="permitprobe-wheel-") as temporary:
         root = Path(temporary)
         environment = root / "venv"
-        _run([sys.executable, "-m", "venv", str(environment)], cwd=root)
+        # Isolated mode ignores PYTHONPATH, user-site packages and other
+        # PYTHON* settings inherited from the release runner. Every Python
+        # process in this smoke test must resolve modules from the interpreter
+        # or the newly installed virtual environment.
+        _run([sys.executable, "-I", "-m", "venv", str(environment)], cwd=root)
         python = environment / "bin" / "python"
-        command = [str(python), "-m", "permitprobe"]
+        command = [str(python), "-I", "-m", "permitprobe"]
         _run(
             [
                 str(python),
+                "-I",
                 "-m",
                 "pip",
                 "--isolated",
@@ -59,6 +64,7 @@ def smoke(wheel: Path, requirements: Path, gitleaks: Path) -> dict[str, str]:
         _run(
             [
                 str(python),
+                "-I",
                 "-m",
                 "pip",
                 "--isolated",
@@ -70,7 +76,7 @@ def smoke(wheel: Path, requirements: Path, gitleaks: Path) -> dict[str, str]:
             ],
             cwd=root,
         )
-        _run([str(python), "-m", "pip", "--isolated", "check"], cwd=root)
+        _run([str(python), "-I", "-m", "pip", "--isolated", "check"], cwd=root)
         observed_version = _run([*command, "--version"], cwd=root).strip()
         if observed_version != expected_version:
             raise ValueError("installed CLI version does not match the wheel")
