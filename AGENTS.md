@@ -72,6 +72,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   and every archive's member count during parsing.
 - Require the complete distribution core-metadata field set, values, ordering and multiplicity to
   match the tagged project; undeclared or duplicate artifact-only metadata must fail verification.
+- Build source distributions with neutral root ownership and reject any TAR member whose numeric or
+  named owner/group identifies the local build account.
 - Registry verification code, dependency locks and scanner installers must execute from the trusted
   main checkout; a requested release tag is data and source evidence, never the verifier.
 - Scanner installation must hash-verify the complete archive before publishing a complete executable

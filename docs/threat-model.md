@@ -128,6 +128,8 @@ sdist bytes and archive member counts, and compares their executable package byt
 commit. Distribution validation also rejects author and maintainer identity fields that are absent
 from the reviewed project metadata, and requires the complete core-metadata field set, values,
 ordering and multiplicity to match the tagged project rather than accepting artifact-only fields.
+Source distributions also require neutral root ownership in every TAR header so a release cannot
+expose or depend on the local account that assembled it.
 
 These measures make reviewed bytes traceable; they do not sandbox the Python interpreter, an
 installed dependency, the operating system, or a deliberately selected local executable.

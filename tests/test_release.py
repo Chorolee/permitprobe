@@ -537,7 +537,7 @@ def test_wheel_install_bypasses_are_rejected(tmp_path, built_distributions, atta
         module.verify_executable_sources(wheel, source, root, VERSION)
 
 
-@pytest.mark.parametrize("attack", ["special", "duplicate", "requires"])
+@pytest.mark.parametrize("attack", ["special", "duplicate", "requires", "owner"])
 def test_source_archive_structure_and_dependencies_are_exact(
     tmp_path, built_distributions, attack
 ):
@@ -554,10 +554,19 @@ def test_source_archive_structure_and_dependencies_are_exact(
                 item for item in entries if item[0].name.endswith("/README.md")
             )
             entries.append((copy.copy(member), content))
-        else:
+        elif attack == "requires":
             name = f"permitprobe-{VERSION}/src/permitprobe.egg-info/requires.txt"
             index = next(i for i, item in enumerate(entries) if item[0].name == name)
             entries[index] = (entries[index][0], b"malicious-package\n")
+        else:
+            index = next(i for i, item in enumerate(entries) if item[0].isfile())
+            member, content = entries[index]
+            member = copy.copy(member)
+            member.uid = 1_000
+            member.gid = 1_000
+            member.uname = "local-user"
+            member.gname = "local-group"
+            entries[index] = (member, content)
 
     _mutate_source(original_source, source, mutate)
     with pytest.raises(ValueError):

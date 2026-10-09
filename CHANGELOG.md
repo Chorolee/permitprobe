@@ -40,6 +40,8 @@ while it is in the `0.x` development series.
   from the reviewed project metadata, preventing identity data from being added only to artifacts.
 - Release provenance now requires the complete distribution metadata field set, values, ordering
   and multiplicity to match the tag, rejecting undeclared or duplicate artifact-only metadata.
+- Source distributions now normalize every TAR member to neutral root ownership, and release
+  verification rejects archives that expose local build-account names or IDs.
 - Registry verification now rejects a GitHub Release containing any asset beyond the exact expected
   wheel and source distribution, so unverified downloads cannot share a verified release page.
 - Baseline, prior-report, checkpoint, exploration-trace, and replay version fields now require JSON
