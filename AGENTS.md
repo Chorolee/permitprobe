@@ -70,6 +70,8 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
 - Registry publication must verify downloaded asset digests and prove executable wheel/sdist
   package bytes match the requested release tag, bounding the complete decompressed sdist stream
   and every archive's member count during parsing.
+- Require the complete distribution core-metadata field set, values, ordering and multiplicity to
+  match the tagged project; undeclared or duplicate artifact-only metadata must fail verification.
 - Registry verification code, dependency locks and scanner installers must execute from the trusted
   main checkout; a requested release tag is data and source evidence, never the verifier.
 - Scanner installation must hash-verify the complete archive before publishing a complete executable
