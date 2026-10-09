@@ -42,6 +42,12 @@ installer_spec = importlib.util.spec_from_file_location(
 installer_module = importlib.util.module_from_spec(installer_spec)
 installer_spec.loader.exec_module(installer_module)
 
+smoke_spec = importlib.util.spec_from_file_location(
+    "smoke_wheel", Path(__file__).resolve().parents[1] / "scripts/smoke_wheel.py"
+)
+smoke_module = importlib.util.module_from_spec(smoke_spec)
+smoke_spec.loader.exec_module(smoke_module)
+
 
 @pytest.fixture
 def release_pair(tmp_path):
@@ -411,6 +417,22 @@ def _source_checkout(root: Path, target: Path) -> Path:
 def test_distribution_is_bound_to_every_checked_out_release_file(built_distributions):
     wheel, source, root = built_distributions
     module.verify_executable_sources(wheel, source, root, VERSION)
+
+
+def test_wheel_smoke_ignores_parent_pythonpath(tmp_path, monkeypatch, built_distributions):
+    wheel, _, root = built_distributions
+    fake = tmp_path / "untrusted" / "permitprobe"
+    fake.mkdir(parents=True)
+    (fake / "__init__.py").write_text("")
+    (fake / "__main__.py").write_text("print('parent-path-module-ran')\n")
+    monkeypatch.setenv("PYTHONPATH", str(fake.parent))
+    scanner = Path(os.environ.get("PERMITPROBE_GITLEAKS", root / ".tools" / "gitleaks"))
+
+    assert smoke_module.smoke(wheel, root / "requirements.lock", scanner) == {
+        "version": VERSION,
+        "schema": "valid",
+        "safe_demo": "pass",
+    }
 
 
 @pytest.mark.parametrize(

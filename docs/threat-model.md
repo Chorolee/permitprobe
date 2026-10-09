@@ -114,7 +114,9 @@ account privileges, a hostile output-directory owner, filesystem rollback, or a 
 ## Supply-chain boundary
 
 Development and release dependencies are installed from a complete SHA256-locked requirements
-file, and isolated wheel smoke requires `pip check` to accept the installed dependency graph.
+file. Wheel smoke runs every Python subprocess in isolated interpreter mode, so inherited
+`PYTHONPATH`, user-site packages, and other `PYTHON*` settings cannot substitute modules for the
+installed distribution; it also requires `pip check` to accept the installed dependency graph.
 GitHub Actions use commit-pinned actions and an explicit supported runner OS label. The scanner
 installer verifies the official archive and executable digests before publication, and
 every scan verifies the executable again before use. CI scans the clean source checkout before

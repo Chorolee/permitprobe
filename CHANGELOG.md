@@ -30,6 +30,8 @@ while it is in the `0.x` development series.
 
 ### Security
 
+- Installed-wheel smoke tests now run Python in isolated mode so inherited module paths and user
+  packages cannot replace the distribution being verified.
 - OpenAPI inventory now validates referenced security-scheme objects, required OAuth scopes and
   HTTPS flow endpoints, rejecting incomplete schemes before reporting protected-route coverage.
 - OpenAPI 3.0 inventory now rejects nonempty requirement arrays for API-key and HTTP schemes while
