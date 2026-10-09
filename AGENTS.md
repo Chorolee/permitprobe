@@ -116,5 +116,7 @@ Independent security regression CLI. Python 3.11+, POSIX handoff reader.
   using it remain subject to the same explicit allow/deny classification and byte comparison.
 - Treat prior reports as strict bounded JSON: reject duplicate keys, non-finite values and invalid
   Unicode before validating finding lineage or compiling any retest request.
+- Require exact JSON integer types for every baseline, report, checkpoint, trace, and replay version
+  field; booleans and numerically equal decimals must never select a document format.
 - Pin GitHub Actions to an explicit supported runner OS as well as full action SHAs; runner label
   migrations must be an intentional reviewed change.
