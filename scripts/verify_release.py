@@ -118,13 +118,13 @@ def _normalized_requirement(value: str) -> str:
     return str(Requirement(value))
 
 
-def _expected_requirements(project: dict) -> set[str]:
-    expected = {_normalized_requirement(item) for item in project.get("dependencies", [])}
+def _expected_requirements(project: dict) -> list[str]:
+    expected = [_normalized_requirement(item) for item in project.get("dependencies", [])]
     for extra, requirements in project.get("optional-dependencies", {}).items():
         for requirement in requirements:
             if ";" in requirement:
                 raise ValueError("Release verifier does not support marked optional dependencies.")
-            expected.add(
+            expected.append(
                 _normalized_requirement(f'{requirement}; extra == "{extra}"')
             )
     return expected
@@ -142,39 +142,34 @@ def _validate_metadata(raw: bytes, source_root: Path, project: dict, version: st
     metadata = BytesParser().parsebytes(raw)
     maintainer = project.get("maintainers", [{}])[0].get("name")
     expected = {
-        "Name": project.get("name"),
-        "Version": version,
-        "Summary": project.get("description"),
-        "Maintainer": maintainer,
-        "License-Expression": project.get("license"),
-        "Requires-Python": project.get("requires-python"),
-        "Description-Content-Type": "text/markdown",
+        "Metadata-Version": ["2.4"],
+        "Name": [project.get("name")],
+        "Version": [version],
+        "Summary": [project.get("description")],
+        "Maintainer": [maintainer],
+        "License-Expression": [project.get("license")],
+        "Project-URL": [
+            f"{name}, {url}" for name, url in project.get("urls", {}).items()
+        ],
+        "Keywords": [",".join(project.get("keywords", []))],
+        "Requires-Python": [project.get("requires-python")],
+        "Description-Content-Type": ["text/markdown"],
+        "License-File": list(project.get("license-files", [])),
+        "Requires-Dist": _expected_requirements(project),
+        "Provides-Extra": list(project.get("optional-dependencies", {})),
+        "Dynamic": ["license-file"],
     }
-    if any(metadata.get_all(name) != [value] for name, value in expected.items()):
-        raise ValueError("Distribution metadata differs from the release tag.")
     if any(
         metadata.get_all(name)
         for name in ("Author", "Author-email", "Maintainer-email")
     ):
         raise ValueError("Distribution contains undeclared identity metadata.")
-    if set(metadata.get_all("Project-URL", [])) != {
-        f"{name}, {url}" for name, url in project.get("urls", {}).items()
-    }:
-        raise ValueError("Distribution project URLs differ from the release tag.")
-    if set(filter(None, metadata.get("Keywords", "").split(","))) != set(
-        project.get("keywords", [])
+    if (
+        metadata.defects
+        or set(metadata.keys()) != set(expected)
+        or any(metadata.get_all(name) != values for name, values in expected.items())
     ):
-        raise ValueError("Distribution keywords differ from the release tag.")
-    if set(metadata.get_all("License-File", [])) != {"LICENSE", "NOTICE"}:
-        raise ValueError("Distribution license files are incomplete.")
-    if set(metadata.get_all("Provides-Extra", [])) != set(
-        project.get("optional-dependencies", {})
-    ):
-        raise ValueError("Distribution extras differ from the release tag.")
-    if {
-        _normalized_requirement(item) for item in metadata.get_all("Requires-Dist", [])
-    } != _expected_requirements(project):
-        raise ValueError("Distribution dependencies differ from the release tag.")
+        raise ValueError("Distribution metadata differs from the release tag.")
     if metadata.get_payload().encode() != (source_root / "README.md").read_bytes():
         raise ValueError("Distribution description differs from the release tag.")
 
