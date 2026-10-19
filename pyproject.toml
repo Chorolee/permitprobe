@@ -15,7 +15,7 @@ keywords = ["security", "authorization", "api-security", "security-testing", "we
 dependencies = [
   "httpx>=0.28,<1",
   "jsonschema>=4.23,<5",
-  "overstep==1.5.0",
+  "overstep==1.7.0",
   "pydantic>=2.10,<3",
 ]
 
